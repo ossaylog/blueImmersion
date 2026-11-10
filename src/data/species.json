@@ -1,0 +1,2279 @@
+{
+  "_comment": "BLUE IMMERSION 해양 생물 데이터 — 특정 해역에 한정하지 않고 전 세계 바다 생물을 한 바다에 모음. depth=[min,max] m, length=m, stay=[min,max] s, cooldown=s. habitats: reef/sand/seagrass/open/wall 적합도 0~1. behavior: school|hoverSchool|mill|wander|graze|hover|cruise|anemone|turtle|manta|eagle|stingray|jelly. origin: 주요 분포 해역(정보용)",
+  "region": "world",
+  "species": [
+    {
+      "id": "chromis",
+      "nameKo": "블루그린 크로미스",
+      "nameEn": "Blue-green chromis",
+      "sci": "Chromis viridis",
+      "sizeClass": "small",
+      "length": 0.075,
+      "behavior": "hoverSchool",
+      "group": [
+        30,
+        55
+      ],
+      "habitats": {
+        "reef": 1,
+        "sand": 0,
+        "seagrass": 0,
+        "open": 0.1,
+        "wall": 0.3
+      },
+      "depth": [
+        1,
+        12
+      ],
+      "weight": 1.0,
+      "stay": [
+        70,
+        140
+      ],
+      "cooldown": 25,
+      "speed": [
+        0.05,
+        0.5
+      ],
+      "curious": 0,
+      "shy": 1.6,
+      "body": {
+        "h": 0.38,
+        "w": 0.12,
+        "tail": "fork",
+        "tailSize": 0.32,
+        "dorsal": [
+          0.25,
+          0.75,
+          0.12
+        ],
+        "anal": [
+          0.25,
+          0.5,
+          0.08
+        ],
+        "pect": 0.12
+      },
+      "pattern": 0,
+      "colors": [
+        "#73d6c9",
+        "#c6f2ee",
+        "#9fe6ea",
+        "#1d4f55"
+      ],
+      "swim": {
+        "freq": 9,
+        "amp": 0.09
+      },
+      "origin": "인도-태평양"
+    },
+    {
+      "id": "anthias",
+      "nameKo": "스케일핀 안티아스",
+      "nameEn": "Scalefin anthias",
+      "sci": "Pseudanthias squamipinnis",
+      "sizeClass": "small",
+      "length": 0.1,
+      "behavior": "hoverSchool",
+      "group": [
+        20,
+        40
+      ],
+      "habitats": {
+        "reef": 0.8,
+        "sand": 0,
+        "seagrass": 0,
+        "open": 0.1,
+        "wall": 1
+      },
+      "depth": [
+        1.5,
+        28
+      ],
+      "weight": 0.8,
+      "stay": [
+        60,
+        120
+      ],
+      "cooldown": 30,
+      "speed": [
+        0.08,
+        0.6
+      ],
+      "curious": 0,
+      "shy": 1.8,
+      "body": {
+        "h": 0.36,
+        "w": 0.12,
+        "tail": "lunate",
+        "tailSize": 0.36,
+        "dorsal": [
+          0.2,
+          0.75,
+          0.14
+        ],
+        "anal": [
+          0.25,
+          0.5,
+          0.1
+        ],
+        "pect": 0.12
+      },
+      "pattern": 5,
+      "colors": [
+        "#f39a52",
+        "#ef7fa5",
+        "#f2d24f",
+        "#b98ae6"
+      ],
+      "swim": {
+        "freq": 8,
+        "amp": 0.09
+      },
+      "origin": "인도-태평양·홍해"
+    },
+    {
+      "id": "fusilier",
+      "nameKo": "옐로우테일 퓨질리어",
+      "nameEn": "Redbelly yellowtail fusilier",
+      "sci": "Caesio cuning",
+      "sizeClass": "small",
+      "length": 0.24,
+      "behavior": "school",
+      "group": [
+        22,
+        45
+      ],
+      "habitats": {
+        "reef": 0.4,
+        "sand": 0.1,
+        "seagrass": 0,
+        "open": 1,
+        "wall": 0.8
+      },
+      "depth": [
+        1.0,
+        30
+      ],
+      "weight": 0.9,
+      "stay": [
+        35,
+        70
+      ],
+      "cooldown": 30,
+      "speed": [
+        0.5,
+        1.4
+      ],
+      "curious": 0,
+      "shy": 3,
+      "body": {
+        "h": 0.3,
+        "w": 0.13,
+        "tail": "fork",
+        "tailSize": 0.36,
+        "dorsal": [
+          0.25,
+          0.7,
+          0.07
+        ],
+        "anal": [
+          0.25,
+          0.45,
+          0.06
+        ],
+        "pect": 0.1
+      },
+      "pattern": 10,
+      "colors": [
+        "#3f7fc9",
+        "#f2d43e",
+        "#e8a6b0",
+        "#1a2c55"
+      ],
+      "swim": {
+        "freq": 7,
+        "amp": 0.08
+      },
+      "origin": "인도-태평양"
+    },
+    {
+      "id": "snapper",
+      "nameKo": "블루스트라이프 스내퍼",
+      "nameEn": "Bluestripe snapper",
+      "sci": "Lutjanus kasmira",
+      "sizeClass": "small",
+      "length": 0.25,
+      "behavior": "school",
+      "group": [
+        14,
+        28
+      ],
+      "habitats": {
+        "reef": 0.9,
+        "sand": 0.1,
+        "seagrass": 0,
+        "open": 0.2,
+        "wall": 1
+      },
+      "depth": [
+        2.0,
+        30
+      ],
+      "weight": 0.7,
+      "stay": [
+        40,
+        80
+      ],
+      "cooldown": 40,
+      "speed": [
+        0.2,
+        0.8
+      ],
+      "curious": 0.2,
+      "shy": 2.2,
+      "body": {
+        "h": 0.38,
+        "w": 0.15,
+        "tail": "truncate",
+        "tailSize": 0.3,
+        "dorsal": [
+          0.25,
+          0.72,
+          0.1
+        ],
+        "anal": [
+          0.22,
+          0.42,
+          0.09
+        ],
+        "pect": 0.12
+      },
+      "pattern": 11,
+      "colors": [
+        "#f2c534",
+        "#4fa6e8",
+        "#f6efd8",
+        "#2a2a2a"
+      ],
+      "swim": {
+        "freq": 6,
+        "amp": 0.08
+      },
+      "origin": "인도-태평양"
+    },
+    {
+      "id": "idol",
+      "nameKo": "무어리시 아이돌",
+      "nameEn": "Moorish idol",
+      "sci": "Zanclus cornutus",
+      "sizeClass": "medium",
+      "length": 0.18,
+      "behavior": "wander",
+      "group": [
+        1,
+        3
+      ],
+      "habitats": {
+        "reef": 1,
+        "sand": 0,
+        "seagrass": 0,
+        "open": 0,
+        "wall": 0.6
+      },
+      "depth": [
+        1.0,
+        25
+      ],
+      "weight": 0.8,
+      "stay": [
+        50,
+        100
+      ],
+      "cooldown": 45,
+      "speed": [
+        0.08,
+        0.45
+      ],
+      "curious": 0.5,
+      "shy": 1.4,
+      "body": {
+        "h": 0.95,
+        "w": 0.1,
+        "tail": "truncate",
+        "tailSize": 0.28,
+        "dorsal": [
+          0.35,
+          0.72,
+          0.55
+        ],
+        "anal": [
+          0.3,
+          0.6,
+          0.35
+        ],
+        "pect": 0.1,
+        "snout": 0.4,
+        "streamer": 1
+      },
+      "pattern": 2,
+      "colors": [
+        "#f4f1e6",
+        "#f3d43c",
+        "#141414",
+        "#e8833a"
+      ],
+      "swim": {
+        "freq": 3,
+        "amp": 0.05
+      },
+      "origin": "인도-태평양"
+    },
+    {
+      "id": "tang",
+      "nameKo": "블루탱",
+      "nameEn": "Palette surgeonfish",
+      "sci": "Paracanthurus hepatus",
+      "sizeClass": "medium",
+      "length": 0.22,
+      "behavior": "wander",
+      "group": [
+        1,
+        4
+      ],
+      "habitats": {
+        "reef": 1,
+        "sand": 0,
+        "seagrass": 0,
+        "open": 0.1,
+        "wall": 0.5
+      },
+      "depth": [
+        1.0,
+        30
+      ],
+      "weight": 0.7,
+      "stay": [
+        50,
+        100
+      ],
+      "cooldown": 45,
+      "speed": [
+        0.1,
+        0.6
+      ],
+      "curious": 0.3,
+      "shy": 1.6,
+      "body": {
+        "h": 0.6,
+        "w": 0.12,
+        "tail": "lunate",
+        "tailSize": 0.3,
+        "dorsal": [
+          0.2,
+          0.78,
+          0.12
+        ],
+        "anal": [
+          0.22,
+          0.55,
+          0.1
+        ],
+        "pect": 0.13
+      },
+      "pattern": 3,
+      "colors": [
+        "#2f5fe0",
+        "#0d1026",
+        "#f2d23a",
+        "#8fb2ff"
+      ],
+      "swim": {
+        "freq": 4,
+        "amp": 0.06
+      },
+      "origin": "인도-태평양"
+    },
+    {
+      "id": "butterfly",
+      "nameKo": "실지느러미 나비고기",
+      "nameEn": "Threadfin butterflyfish",
+      "sci": "Chaetodon auriga",
+      "sizeClass": "medium",
+      "length": 0.17,
+      "behavior": "wander",
+      "group": [
+        2,
+        2
+      ],
+      "habitats": {
+        "reef": 1,
+        "sand": 0.1,
+        "seagrass": 0,
+        "open": 0,
+        "wall": 0.4
+      },
+      "depth": [
+        1,
+        20
+      ],
+      "weight": 0.8,
+      "stay": [
+        50,
+        100
+      ],
+      "cooldown": 40,
+      "speed": [
+        0.08,
+        0.4
+      ],
+      "curious": 0.4,
+      "shy": 1.3,
+      "body": {
+        "h": 0.8,
+        "w": 0.1,
+        "tail": "truncate",
+        "tailSize": 0.24,
+        "dorsal": [
+          0.25,
+          0.75,
+          0.16
+        ],
+        "anal": [
+          0.25,
+          0.6,
+          0.12
+        ],
+        "pect": 0.1,
+        "snout": 0.15
+      },
+      "pattern": 6,
+      "colors": [
+        "#f6f3ea",
+        "#f4c935",
+        "#121212",
+        "#d7d7d7"
+      ],
+      "swim": {
+        "freq": 3.5,
+        "amp": 0.05
+      },
+      "origin": "인도-태평양·홍해"
+    },
+    {
+      "id": "parrotfish",
+      "nameKo": "스팁헤드 앵무고기",
+      "nameEn": "Steephead parrotfish",
+      "sci": "Chlorurus microrhinos",
+      "sizeClass": "medium",
+      "length": 0.55,
+      "behavior": "graze",
+      "group": [
+        1,
+        3
+      ],
+      "habitats": {
+        "reef": 1,
+        "sand": 0.2,
+        "seagrass": 0.1,
+        "open": 0,
+        "wall": 0.4
+      },
+      "depth": [
+        1.0,
+        20
+      ],
+      "weight": 0.8,
+      "stay": [
+        60,
+        120
+      ],
+      "cooldown": 45,
+      "speed": [
+        0.15,
+        0.7
+      ],
+      "curious": 0.1,
+      "shy": 2.2,
+      "body": {
+        "h": 0.38,
+        "w": 0.18,
+        "tail": "lunate",
+        "tailSize": 0.26,
+        "dorsal": [
+          0.22,
+          0.75,
+          0.07
+        ],
+        "anal": [
+          0.22,
+          0.45,
+          0.06
+        ],
+        "pect": 0.13,
+        "snout": -0.3
+      },
+      "pattern": 4,
+      "colors": [
+        "#2fa58f",
+        "#e08aa8",
+        "#4ab9c9",
+        "#f3c4d0"
+      ],
+      "swim": {
+        "freq": 2.6,
+        "amp": 0.05
+      },
+      "origin": "서태평양"
+    },
+    {
+      "id": "lionfish",
+      "nameKo": "라이온피시(쏠배감펭)",
+      "nameEn": "Red lionfish",
+      "sci": "Pterois volitans",
+      "sizeClass": "medium",
+      "length": 0.3,
+      "behavior": "hover",
+      "group": [
+        1,
+        1
+      ],
+      "habitats": {
+        "reef": 0.8,
+        "sand": 0,
+        "seagrass": 0,
+        "open": 0,
+        "wall": 1
+      },
+      "depth": [
+        1.5,
+        30
+      ],
+      "weight": 0.45,
+      "stay": [
+        60,
+        120
+      ],
+      "cooldown": 80,
+      "speed": [
+        0.02,
+        0.15
+      ],
+      "curious": 0,
+      "shy": 0.8,
+      "body": {
+        "h": 0.4,
+        "w": 0.16,
+        "tail": "round",
+        "tailSize": 0.24,
+        "dorsal": [
+          0.25,
+          0.85,
+          0.45
+        ],
+        "anal": [
+          0.25,
+          0.45,
+          0.15
+        ],
+        "pect": 0.55,
+        "spiky": 1
+      },
+      "pattern": 8,
+      "colors": [
+        "#a3362a",
+        "#f2e6dc",
+        "#c9503e",
+        "#2a1210"
+      ],
+      "swim": {
+        "freq": 1.5,
+        "amp": 0.03
+      },
+      "origin": "인도-태평양·카리브해"
+    },
+    {
+      "id": "wrasse",
+      "nameKo": "나폴레옹피시(험프헤드 놀래기)",
+      "nameEn": "Humphead (Maori) wrasse",
+      "sci": "Cheilinus undulatus",
+      "sizeClass": "large",
+      "length": 1.3,
+      "behavior": "graze",
+      "group": [
+        1,
+        1
+      ],
+      "habitats": {
+        "reef": 0.9,
+        "sand": 0.2,
+        "seagrass": 0,
+        "open": 0.3,
+        "wall": 1
+      },
+      "depth": [
+        1.5,
+        30
+      ],
+      "weight": 0.35,
+      "stay": [
+        40,
+        70
+      ],
+      "cooldown": 120,
+      "speed": [
+        0.25,
+        0.55
+      ],
+      "curious": 0.8,
+      "shy": 0.5,
+      "body": {
+        "h": 0.42,
+        "w": 0.2,
+        "tail": "round",
+        "tailSize": 0.22,
+        "dorsal": [
+          0.2,
+          0.68,
+          0.09
+        ],
+        "anal": [
+          0.2,
+          0.42,
+          0.08
+        ],
+        "pect": 0.14,
+        "hump": 1
+      },
+      "pattern": 9,
+      "colors": [
+        "#3f8f8a",
+        "#255f6a",
+        "#6fb1a0",
+        "#b8e0d0"
+      ],
+      "swim": {
+        "freq": 1.6,
+        "amp": 0.04
+      },
+      "origin": "인도-태평양·홍해"
+    },
+    {
+      "id": "blacktip",
+      "nameKo": "블랙팁 리프 샤크",
+      "nameEn": "Blacktip reef shark",
+      "sci": "Carcharhinus melanopterus",
+      "sizeClass": "large",
+      "length": 1.3,
+      "behavior": "cruise",
+      "group": [
+        1,
+        1
+      ],
+      "habitats": {
+        "reef": 0.6,
+        "sand": 0.8,
+        "seagrass": 0.3,
+        "open": 0.6,
+        "wall": 0.2
+      },
+      "depth": [
+        0.8,
+        10
+      ],
+      "weight": 0.25,
+      "stay": [
+        30,
+        50
+      ],
+      "cooldown": 150,
+      "speed": [
+        0.6,
+        1.0
+      ],
+      "curious": 0,
+      "shy": 4,
+      "body": {
+        "h": 0.2,
+        "w": 0.15,
+        "tail": "shark",
+        "tailSize": 0.38,
+        "dorsal": [
+          0.48,
+          0.62,
+          0.22
+        ],
+        "anal": [
+          0.2,
+          0.26,
+          0.06
+        ],
+        "pect": 0.32,
+        "shark": 1
+      },
+      "pattern": 7,
+      "colors": [
+        "#8c9298",
+        "#eef0ee",
+        "#101214",
+        "#6a7076"
+      ],
+      "swim": {
+        "freq": 1.8,
+        "amp": 0.07
+      },
+      "origin": "인도-태평양"
+    },
+    {
+      "id": "whitetip",
+      "nameKo": "화이트팁 리프 샤크",
+      "nameEn": "Whitetip reef shark",
+      "sci": "Triaenodon obesus",
+      "sizeClass": "large",
+      "length": 1.5,
+      "behavior": "cruise",
+      "group": [
+        1,
+        1
+      ],
+      "habitats": {
+        "reef": 0.5,
+        "sand": 0.9,
+        "seagrass": 0,
+        "open": 0.3,
+        "wall": 1
+      },
+      "depth": [
+        4.0,
+        35
+      ],
+      "weight": 0.35,
+      "stay": [
+        35,
+        60
+      ],
+      "cooldown": 120,
+      "speed": [
+        0.45,
+        0.8
+      ],
+      "curious": 0,
+      "shy": 3,
+      "body": {
+        "h": 0.17,
+        "w": 0.14,
+        "tail": "shark",
+        "tailSize": 0.36,
+        "dorsal": [
+          0.45,
+          0.6,
+          0.17
+        ],
+        "anal": [
+          0.2,
+          0.26,
+          0.06
+        ],
+        "pect": 0.3,
+        "shark": 1
+      },
+      "pattern": 7,
+      "colors": [
+        "#7d8186",
+        "#e6e6e0",
+        "#f4f4f0",
+        "#5a5e63"
+      ],
+      "swim": {
+        "freq": 1.5,
+        "amp": 0.08
+      },
+      "origin": "인도-태평양"
+    },
+    {
+      "id": "greyreef",
+      "nameKo": "그레이 리프 샤크",
+      "nameEn": "Grey reef shark",
+      "sci": "Carcharhinus amblyrhynchos",
+      "sizeClass": "large",
+      "length": 1.7,
+      "behavior": "cruise",
+      "group": [
+        1,
+        2
+      ],
+      "habitats": {
+        "reef": 0.2,
+        "sand": 0.3,
+        "seagrass": 0,
+        "open": 1,
+        "wall": 0.8
+      },
+      "depth": [
+        7.0,
+        35
+      ],
+      "weight": 0.25,
+      "stay": [
+        30,
+        50
+      ],
+      "cooldown": 150,
+      "speed": [
+        0.6,
+        1.0
+      ],
+      "curious": 0,
+      "shy": 4,
+      "body": {
+        "h": 0.2,
+        "w": 0.15,
+        "tail": "shark",
+        "tailSize": 0.4,
+        "dorsal": [
+          0.48,
+          0.62,
+          0.2
+        ],
+        "anal": [
+          0.2,
+          0.26,
+          0.06
+        ],
+        "pect": 0.32,
+        "shark": 1
+      },
+      "pattern": 7,
+      "colors": [
+        "#6f7882",
+        "#e8ebe6",
+        "#22262a",
+        "#596068"
+      ],
+      "swim": {
+        "freq": 1.7,
+        "amp": 0.07
+      },
+      "origin": "인도-태평양"
+    },
+    {
+      "id": "turtle",
+      "nameKo": "푸른바다거북",
+      "nameEn": "Green sea turtle",
+      "sci": "Chelonia mydas",
+      "sizeClass": "large",
+      "length": 1.0,
+      "behavior": "turtle",
+      "group": [
+        1,
+        1
+      ],
+      "habitats": {
+        "reef": 0.9,
+        "sand": 0.3,
+        "seagrass": 1,
+        "open": 0.4,
+        "wall": 0.3
+      },
+      "depth": [
+        0,
+        20
+      ],
+      "weight": 0.6,
+      "stay": [
+        60,
+        110
+      ],
+      "cooldown": 70,
+      "speed": [
+        0.2,
+        0.45
+      ],
+      "curious": 0.4,
+      "shy": 1.5,
+      "colors": [
+        "#6b5a3a",
+        "#c9b07a",
+        "#a4946a",
+        "#e8dcc0"
+      ],
+      "origin": "전 세계 열대·온대"
+    },
+    {
+      "id": "manta",
+      "nameKo": "리프 만타가오리",
+      "nameEn": "Reef manta ray",
+      "sci": "Mobula alfredi",
+      "sizeClass": "mega",
+      "length": 3.6,
+      "behavior": "manta",
+      "group": [
+        1,
+        1
+      ],
+      "habitats": {
+        "reef": 0.3,
+        "sand": 0.3,
+        "seagrass": 0,
+        "open": 1,
+        "wall": 0.6
+      },
+      "depth": [
+        1,
+        30
+      ],
+      "weight": 0.22,
+      "stay": [
+        45,
+        80
+      ],
+      "cooldown": 200,
+      "speed": [
+        0.6,
+        1.0
+      ],
+      "curious": 0.3,
+      "shy": 3,
+      "colors": [
+        "#1d2228",
+        "#f2f2ee",
+        "#3a4048",
+        "#ffffff"
+      ],
+      "origin": "인도-태평양"
+    },
+    {
+      "id": "stingray",
+      "nameKo": "블루스팟 가오리",
+      "nameEn": "Bluespotted ribbontail ray",
+      "sci": "Taeniura lymma",
+      "sizeClass": "medium",
+      "length": 0.35,
+      "behavior": "stingray",
+      "group": [
+        1,
+        1
+      ],
+      "habitats": {
+        "reef": 0.3,
+        "sand": 1,
+        "seagrass": 0.2,
+        "open": 0,
+        "wall": 0
+      },
+      "depth": [
+        1,
+        25
+      ],
+      "weight": 0.5,
+      "stay": [
+        60,
+        120
+      ],
+      "cooldown": 70,
+      "speed": [
+        0.2,
+        0.6
+      ],
+      "curious": 0,
+      "shy": 1.8,
+      "colors": [
+        "#b59a5c",
+        "#3f8be8",
+        "#ece4d0",
+        "#2a2a2a"
+      ],
+      "origin": "인도-태평양·홍해"
+    },
+    {
+      "id": "clownfish",
+      "nameKo": "흰동가리(오렌지 클라운피시)",
+      "nameEn": "Orange clownfish",
+      "sci": "Amphiprion percula",
+      "sizeClass": "resident",
+      "length": 0.085,
+      "behavior": "anemone",
+      "group": [
+        2,
+        4
+      ],
+      "habitats": {
+        "reef": 1,
+        "sand": 0,
+        "seagrass": 0,
+        "open": 0,
+        "wall": 0
+      },
+      "depth": [
+        1,
+        12
+      ],
+      "weight": 0,
+      "stay": [
+        0,
+        0
+      ],
+      "cooldown": 0,
+      "speed": [
+        0.03,
+        0.3
+      ],
+      "curious": 0.2,
+      "shy": 1.2,
+      "body": {
+        "h": 0.48,
+        "w": 0.16,
+        "tail": "round",
+        "tailSize": 0.24,
+        "dorsal": [
+          0.22,
+          0.78,
+          0.14
+        ],
+        "anal": [
+          0.25,
+          0.45,
+          0.1
+        ],
+        "pect": 0.14
+      },
+      "pattern": 1,
+      "colors": [
+        "#f2741e",
+        "#fbfbf4",
+        "#141414",
+        "#f08a2c"
+      ],
+      "swim": {
+        "freq": 7,
+        "amp": 0.07
+      },
+      "origin": "서태평양"
+    },
+    {
+      "id": "whaleshark",
+      "nameKo": "고래상어",
+      "nameEn": "Whale shark",
+      "sci": "Rhincodon typus",
+      "origin": "전 세계 열대 바다",
+      "sizeClass": "mega",
+      "length": 8.5,
+      "behavior": "cruise",
+      "group": [
+        1,
+        1
+      ],
+      "habitats": {
+        "reef": 0.3,
+        "sand": 0.2,
+        "seagrass": 0,
+        "open": 1,
+        "wall": 0.5
+      },
+      "depth": [
+        0.8,
+        30
+      ],
+      "weight": 0.32,
+      "stay": [
+        45,
+        75
+      ],
+      "cooldown": 150,
+      "speed": [
+        0.5,
+        0.9
+      ],
+      "curious": 0.4,
+      "shy": 2.8,
+      "body": {
+        "h": 0.22,
+        "w": 0.2,
+        "tail": "shark",
+        "tailSize": 0.32,
+        "dorsal": [
+          0.45,
+          0.58,
+          0.12
+        ],
+        "anal": [
+          0.2,
+          0.25,
+          0.04
+        ],
+        "pect": 0.22,
+        "snout": -0.7,
+        "shark": 1
+      },
+      "pattern": 12,
+      "colors": [
+        "#3b4a5c",
+        "#e8ece8",
+        "#e9efe9",
+        "#202830"
+      ],
+      "swim": {
+        "freq": 0.6,
+        "amp": 0.06
+      }
+    },
+    {
+      "id": "humpback",
+      "nameKo": "혹등고래",
+      "nameEn": "Humpback whale",
+      "sci": "Megaptera novaeangliae",
+      "origin": "전 세계 대양",
+      "sizeClass": "mega",
+      "length": 13,
+      "behavior": "cruise",
+      "group": [
+        1,
+        2
+      ],
+      "habitats": {
+        "reef": 0,
+        "sand": 0.1,
+        "seagrass": 0,
+        "open": 1,
+        "wall": 0.4
+      },
+      "depth": [
+        3,
+        30
+      ],
+      "weight": 0.2,
+      "stay": [
+        40,
+        60
+      ],
+      "cooldown": 220,
+      "speed": [
+        1.0,
+        1.5
+      ],
+      "curious": 0,
+      "shy": 9,
+      "body": {
+        "h": 0.24,
+        "w": 0.22,
+        "tail": "truncate",
+        "tailSize": 0.3,
+        "dorsal": [
+          0.3,
+          0.36,
+          0.03
+        ],
+        "anal": [
+          0,
+          0,
+          0
+        ],
+        "pect": 0.32,
+        "snout": -0.4,
+        "cetacean": 1
+      },
+      "pattern": 19,
+      "colors": [
+        "#2a2f36",
+        "#d8dadb",
+        "#1b1f24",
+        "#ffffff"
+      ],
+      "swim": {
+        "freq": 0.35,
+        "amp": 0.05
+      }
+    },
+    {
+      "id": "dolphin",
+      "nameKo": "큰돌고래",
+      "nameEn": "Bottlenose dolphin",
+      "sci": "Tursiops truncatus",
+      "origin": "전 세계 온대·열대",
+      "sizeClass": "large",
+      "length": 2.4,
+      "behavior": "school",
+      "group": [
+        3,
+        6
+      ],
+      "habitats": {
+        "reef": 0.3,
+        "sand": 0.3,
+        "seagrass": 0.1,
+        "open": 1,
+        "wall": 0.3
+      },
+      "depth": [
+        0.5,
+        20
+      ],
+      "weight": 0.38,
+      "stay": [
+        30,
+        50
+      ],
+      "cooldown": 100,
+      "speed": [
+        1.4,
+        2.8
+      ],
+      "curious": 0.3,
+      "shy": 2.2,
+      "body": {
+        "h": 0.2,
+        "w": 0.2,
+        "tail": "truncate",
+        "tailSize": 0.26,
+        "dorsal": [
+          0.42,
+          0.55,
+          0.16
+        ],
+        "anal": [
+          0,
+          0,
+          0
+        ],
+        "pect": 0.14,
+        "snout": 0.55,
+        "cetacean": 1
+      },
+      "pattern": 19,
+      "colors": [
+        "#6d7a86",
+        "#e6e9ea",
+        "#4a5560",
+        "#000000"
+      ],
+      "swim": {
+        "freq": 2.2,
+        "amp": 0.09
+      }
+    },
+    {
+      "id": "hammerhead",
+      "nameKo": "귀상어",
+      "nameEn": "Scalloped hammerhead",
+      "sci": "Sphyrna lewini",
+      "origin": "전 세계 열대(갈라파고스·코코스)",
+      "sizeClass": "large",
+      "length": 2.6,
+      "behavior": "cruise",
+      "group": [
+        1,
+        3
+      ],
+      "habitats": {
+        "reef": 0.2,
+        "sand": 0.3,
+        "seagrass": 0,
+        "open": 1,
+        "wall": 0.9
+      },
+      "depth": [
+        8,
+        35
+      ],
+      "weight": 0.3,
+      "stay": [
+        30,
+        55
+      ],
+      "cooldown": 130,
+      "speed": [
+        0.6,
+        1.0
+      ],
+      "curious": 0,
+      "shy": 3.5,
+      "body": {
+        "h": 0.18,
+        "w": 0.14,
+        "tail": "shark",
+        "tailSize": 0.4,
+        "dorsal": [
+          0.48,
+          0.6,
+          0.26
+        ],
+        "anal": [
+          0.2,
+          0.26,
+          0.05
+        ],
+        "pect": 0.3,
+        "shark": 1,
+        "hammer": 0.32
+      },
+      "pattern": 7,
+      "colors": [
+        "#7f878e",
+        "#e9ebe7",
+        "#5e666d",
+        "#4a5157"
+      ],
+      "swim": {
+        "freq": 1.6,
+        "amp": 0.07
+      }
+    },
+    {
+      "id": "mola",
+      "nameKo": "개복치",
+      "nameEn": "Ocean sunfish",
+      "sci": "Mola mola",
+      "origin": "전 세계 온대·열대 대양",
+      "sizeClass": "large",
+      "length": 1.8,
+      "behavior": "cruise",
+      "group": [
+        1,
+        1
+      ],
+      "habitats": {
+        "reef": 0.1,
+        "sand": 0.1,
+        "seagrass": 0,
+        "open": 1,
+        "wall": 0.4
+      },
+      "depth": [
+        1,
+        30
+      ],
+      "weight": 0.26,
+      "stay": [
+        40,
+        70
+      ],
+      "cooldown": 150,
+      "speed": [
+        0.25,
+        0.4
+      ],
+      "curious": 0.6,
+      "shy": 1.8,
+      "body": {
+        "h": 1.0,
+        "w": 0.18,
+        "tail": "round",
+        "tailSize": 0.1,
+        "dorsal": [
+          0.25,
+          0.4,
+          0.55
+        ],
+        "anal": [
+          0.25,
+          0.4,
+          0.5
+        ],
+        "pect": 0.08,
+        "snout": -0.2
+      },
+      "pattern": 20,
+      "colors": [
+        "#8d98a0",
+        "#c9d0d4",
+        "#6f7a82",
+        "#202020"
+      ],
+      "swim": {
+        "freq": 1.2,
+        "amp": 0.02
+      }
+    },
+    {
+      "id": "zebrashark",
+      "nameKo": "얼룩말상어(표범상어)",
+      "nameEn": "Zebra shark",
+      "sci": "Stegostoma tigrinum",
+      "origin": "인도-태평양",
+      "sizeClass": "large",
+      "length": 2.2,
+      "behavior": "cruise",
+      "group": [
+        1,
+        1
+      ],
+      "habitats": {
+        "reef": 0.4,
+        "sand": 1,
+        "seagrass": 0.2,
+        "open": 0,
+        "wall": 0.2
+      },
+      "depth": [
+        3,
+        30
+      ],
+      "weight": 0.28,
+      "stay": [
+        40,
+        70
+      ],
+      "cooldown": 120,
+      "speed": [
+        0.25,
+        0.4
+      ],
+      "curious": 0.2,
+      "shy": 1.8,
+      "body": {
+        "h": 0.16,
+        "w": 0.18,
+        "tail": "shark",
+        "tailSize": 0.55,
+        "dorsal": [
+          0.42,
+          0.52,
+          0.1
+        ],
+        "anal": [
+          0.2,
+          0.26,
+          0.05
+        ],
+        "pect": 0.26,
+        "shark": 1,
+        "snout": -0.3
+      },
+      "pattern": 21,
+      "colors": [
+        "#c9b48a",
+        "#e6dcc4",
+        "#3a2e22",
+        "#5a4e3a"
+      ],
+      "swim": {
+        "freq": 1.1,
+        "amp": 0.09
+      }
+    },
+    {
+      "id": "barracuda",
+      "nameKo": "셰브론 바라쿠다",
+      "nameEn": "Chevron barracuda",
+      "sci": "Sphyraena qenie",
+      "origin": "인도-태평양·홍해",
+      "sizeClass": "small",
+      "length": 0.9,
+      "behavior": "mill",
+      "group": [
+        20,
+        40
+      ],
+      "habitats": {
+        "reef": 0.3,
+        "sand": 0.2,
+        "seagrass": 0,
+        "open": 1,
+        "wall": 0.9
+      },
+      "depth": [
+        3,
+        30
+      ],
+      "weight": 0.6,
+      "stay": [
+        50,
+        90
+      ],
+      "cooldown": 70,
+      "speed": [
+        0.3,
+        0.8
+      ],
+      "curious": 0,
+      "shy": 2.5,
+      "body": {
+        "h": 0.14,
+        "w": 0.1,
+        "tail": "fork",
+        "tailSize": 0.24,
+        "dorsal": [
+          0.45,
+          0.55,
+          0.06
+        ],
+        "anal": [
+          0.3,
+          0.38,
+          0.05
+        ],
+        "pect": 0.08,
+        "snout": 0.5
+      },
+      "pattern": 13,
+      "colors": [
+        "#3c5a6a",
+        "#cfd8dc",
+        "#2a3a44",
+        "#101010"
+      ],
+      "swim": {
+        "freq": 2,
+        "amp": 0.05
+      }
+    },
+    {
+      "id": "jack",
+      "nameKo": "빅아이 트레발리 무리",
+      "nameEn": "Bigeye trevally",
+      "sci": "Caranx sexfasciatus",
+      "origin": "인도-태평양·동태평양",
+      "sizeClass": "small",
+      "length": 0.5,
+      "behavior": "mill",
+      "group": [
+        40,
+        80
+      ],
+      "habitats": {
+        "reef": 0.3,
+        "sand": 0.1,
+        "seagrass": 0,
+        "open": 1,
+        "wall": 0.8
+      },
+      "depth": [
+        4,
+        30
+      ],
+      "weight": 0.55,
+      "stay": [
+        50,
+        90
+      ],
+      "cooldown": 80,
+      "speed": [
+        0.4,
+        1.1
+      ],
+      "curious": 0,
+      "shy": 2.2,
+      "body": {
+        "h": 0.4,
+        "w": 0.14,
+        "tail": "fork",
+        "tailSize": 0.34,
+        "dorsal": [
+          0.3,
+          0.6,
+          0.1
+        ],
+        "anal": [
+          0.3,
+          0.5,
+          0.08
+        ],
+        "pect": 0.16
+      },
+      "pattern": 14,
+      "colors": [
+        "#4a5f6e",
+        "#d6dde0",
+        "#2c3a44",
+        "#c9b23a"
+      ],
+      "swim": {
+        "freq": 4,
+        "amp": 0.07
+      }
+    },
+    {
+      "id": "sardine",
+      "nameKo": "정어리 떼",
+      "nameEn": "Pacific sardine",
+      "sci": "Sardinops sagax",
+      "origin": "태평양·남아프리카(사딘 런)",
+      "sizeClass": "small",
+      "length": 0.18,
+      "behavior": "school",
+      "group": [
+        90,
+        160
+      ],
+      "habitats": {
+        "reef": 0.3,
+        "sand": 0.2,
+        "seagrass": 0,
+        "open": 1,
+        "wall": 0.5
+      },
+      "depth": [
+        1,
+        20
+      ],
+      "weight": 0.55,
+      "stay": [
+        40,
+        70
+      ],
+      "cooldown": 70,
+      "speed": [
+        0.6,
+        1.6
+      ],
+      "curious": 0,
+      "shy": 2.6,
+      "body": {
+        "h": 0.22,
+        "w": 0.1,
+        "tail": "fork",
+        "tailSize": 0.3,
+        "dorsal": [
+          0.4,
+          0.55,
+          0.06
+        ],
+        "anal": [
+          0.2,
+          0.3,
+          0.03
+        ],
+        "pect": 0.07
+      },
+      "pattern": 14,
+      "colors": [
+        "#2f5f7a",
+        "#e2e8ea",
+        "#1e3a4a",
+        "#101010"
+      ],
+      "swim": {
+        "freq": 9,
+        "amp": 0.08
+      }
+    },
+    {
+      "id": "emperor",
+      "nameKo": "황제엔젤피시",
+      "nameEn": "Emperor angelfish",
+      "sci": "Pomacanthus imperator",
+      "origin": "인도-태평양·홍해",
+      "sizeClass": "medium",
+      "length": 0.3,
+      "behavior": "wander",
+      "group": [
+        1,
+        2
+      ],
+      "habitats": {
+        "reef": 1,
+        "sand": 0,
+        "seagrass": 0,
+        "open": 0,
+        "wall": 0.6
+      },
+      "depth": [
+        1,
+        25
+      ],
+      "weight": 0.7,
+      "stay": [
+        50,
+        100
+      ],
+      "cooldown": 45,
+      "speed": [
+        0.08,
+        0.4
+      ],
+      "curious": 0.4,
+      "shy": 1.4,
+      "body": {
+        "h": 0.62,
+        "w": 0.13,
+        "tail": "round",
+        "tailSize": 0.2,
+        "dorsal": [
+          0.25,
+          0.85,
+          0.12
+        ],
+        "anal": [
+          0.25,
+          0.55,
+          0.1
+        ],
+        "pect": 0.12
+      },
+      "pattern": 15,
+      "colors": [
+        "#2b5fd8",
+        "#f2d33a",
+        "#111a2a",
+        "#e7e7e0"
+      ],
+      "swim": {
+        "freq": 3,
+        "amp": 0.05
+      }
+    },
+    {
+      "id": "regalangel",
+      "nameKo": "리갈 엔젤피시",
+      "nameEn": "Regal angelfish",
+      "sci": "Pygoplites diacanthus",
+      "origin": "인도-태평양·홍해",
+      "sizeClass": "medium",
+      "length": 0.22,
+      "behavior": "wander",
+      "group": [
+        1,
+        2
+      ],
+      "habitats": {
+        "reef": 1,
+        "sand": 0,
+        "seagrass": 0,
+        "open": 0,
+        "wall": 0.6
+      },
+      "depth": [
+        1,
+        30
+      ],
+      "weight": 0.6,
+      "stay": [
+        50,
+        100
+      ],
+      "cooldown": 45,
+      "speed": [
+        0.08,
+        0.4
+      ],
+      "curious": 0.3,
+      "shy": 1.5,
+      "body": {
+        "h": 0.6,
+        "w": 0.13,
+        "tail": "round",
+        "tailSize": 0.2,
+        "dorsal": [
+          0.25,
+          0.85,
+          0.12
+        ],
+        "anal": [
+          0.25,
+          0.55,
+          0.1
+        ],
+        "pect": 0.12
+      },
+      "pattern": 22,
+      "colors": [
+        "#f0922b",
+        "#d9ecf7",
+        "#1f2c6e",
+        "#f5d23a"
+      ],
+      "swim": {
+        "freq": 3,
+        "amp": 0.05
+      }
+    },
+    {
+      "id": "yellowtang",
+      "nameKo": "옐로탱",
+      "nameEn": "Yellow tang",
+      "sci": "Zebrasoma flavescens",
+      "origin": "하와이",
+      "sizeClass": "medium",
+      "length": 0.18,
+      "behavior": "wander",
+      "group": [
+        2,
+        6
+      ],
+      "habitats": {
+        "reef": 1,
+        "sand": 0,
+        "seagrass": 0,
+        "open": 0,
+        "wall": 0.4
+      },
+      "depth": [
+        1,
+        20
+      ],
+      "weight": 0.7,
+      "stay": [
+        50,
+        100
+      ],
+      "cooldown": 45,
+      "speed": [
+        0.1,
+        0.5
+      ],
+      "curious": 0.3,
+      "shy": 1.4,
+      "body": {
+        "h": 0.75,
+        "w": 0.1,
+        "tail": "lunate",
+        "tailSize": 0.24,
+        "dorsal": [
+          0.25,
+          0.8,
+          0.2
+        ],
+        "anal": [
+          0.25,
+          0.55,
+          0.17
+        ],
+        "pect": 0.1,
+        "snout": 0.3
+      },
+      "pattern": 16,
+      "colors": [
+        "#f6d31e",
+        "#f6d31e",
+        "#f2c814",
+        "#ffffff"
+      ],
+      "swim": {
+        "freq": 3.5,
+        "amp": 0.05
+      }
+    },
+    {
+      "id": "garibaldi",
+      "nameKo": "가리발디",
+      "nameEn": "Garibaldi",
+      "sci": "Hypsypops rubicundus",
+      "origin": "캘리포니아 켈프숲",
+      "sizeClass": "medium",
+      "length": 0.25,
+      "behavior": "wander",
+      "group": [
+        1,
+        2
+      ],
+      "habitats": {
+        "reef": 0.9,
+        "sand": 0.1,
+        "seagrass": 0.3,
+        "open": 0,
+        "wall": 0.6
+      },
+      "depth": [
+        1,
+        20
+      ],
+      "weight": 0.5,
+      "stay": [
+        50,
+        90
+      ],
+      "cooldown": 60,
+      "speed": [
+        0.08,
+        0.4
+      ],
+      "curious": 0.5,
+      "shy": 1.2,
+      "body": {
+        "h": 0.55,
+        "w": 0.14,
+        "tail": "lunate",
+        "tailSize": 0.22,
+        "dorsal": [
+          0.25,
+          0.8,
+          0.12
+        ],
+        "anal": [
+          0.25,
+          0.5,
+          0.1
+        ],
+        "pect": 0.12
+      },
+      "pattern": 16,
+      "colors": [
+        "#ff6a12",
+        "#ff7a20",
+        "#ff5a0a",
+        "#ffffff"
+      ],
+      "swim": {
+        "freq": 4,
+        "amp": 0.06
+      }
+    },
+    {
+      "id": "queenangel",
+      "nameKo": "퀸 엔젤피시",
+      "nameEn": "Queen angelfish",
+      "sci": "Holacanthus ciliaris",
+      "origin": "카리브해·대서양",
+      "sizeClass": "medium",
+      "length": 0.35,
+      "behavior": "wander",
+      "group": [
+        1,
+        2
+      ],
+      "habitats": {
+        "reef": 1,
+        "sand": 0,
+        "seagrass": 0,
+        "open": 0,
+        "wall": 0.6
+      },
+      "depth": [
+        1,
+        25
+      ],
+      "weight": 0.6,
+      "stay": [
+        50,
+        100
+      ],
+      "cooldown": 50,
+      "speed": [
+        0.08,
+        0.4
+      ],
+      "curious": 0.3,
+      "shy": 1.4,
+      "body": {
+        "h": 0.65,
+        "w": 0.12,
+        "tail": "round",
+        "tailSize": 0.2,
+        "dorsal": [
+          0.25,
+          0.85,
+          0.16
+        ],
+        "anal": [
+          0.25,
+          0.55,
+          0.14
+        ],
+        "pect": 0.12
+      },
+      "pattern": 17,
+      "colors": [
+        "#2d7fd0",
+        "#f3d23a",
+        "#1a3fb8",
+        "#e0e0e0"
+      ],
+      "swim": {
+        "freq": 3,
+        "amp": 0.05
+      }
+    },
+    {
+      "id": "batfish",
+      "nameKo": "박쥐고기",
+      "nameEn": "Longfin batfish",
+      "sci": "Platax teira",
+      "origin": "인도-태평양",
+      "sizeClass": "medium",
+      "length": 0.45,
+      "behavior": "wander",
+      "group": [
+        2,
+        6
+      ],
+      "habitats": {
+        "reef": 0.8,
+        "sand": 0.2,
+        "seagrass": 0,
+        "open": 0.4,
+        "wall": 0.8
+      },
+      "depth": [
+        2,
+        25
+      ],
+      "weight": 0.55,
+      "stay": [
+        60,
+        110
+      ],
+      "cooldown": 60,
+      "speed": [
+        0.08,
+        0.4
+      ],
+      "curious": 0.95,
+      "shy": 0.9,
+      "body": {
+        "h": 1.0,
+        "w": 0.1,
+        "tail": "truncate",
+        "tailSize": 0.2,
+        "dorsal": [
+          0.3,
+          0.75,
+          0.45
+        ],
+        "anal": [
+          0.3,
+          0.65,
+          0.45
+        ],
+        "pect": 0.1,
+        "snout": -0.1
+      },
+      "pattern": 18,
+      "colors": [
+        "#c9cfd2",
+        "#9aa2a8",
+        "#1c2024",
+        "#e0d070"
+      ],
+      "swim": {
+        "freq": 2.4,
+        "amp": 0.04
+      }
+    },
+    {
+      "id": "bumphead",
+      "nameKo": "혹돔앵무고기",
+      "nameEn": "Bumphead parrotfish",
+      "sci": "Bolbometopon muricatum",
+      "origin": "인도-태평양",
+      "sizeClass": "medium",
+      "length": 1.1,
+      "behavior": "graze",
+      "group": [
+        3,
+        8
+      ],
+      "habitats": {
+        "reef": 1,
+        "sand": 0.2,
+        "seagrass": 0,
+        "open": 0.1,
+        "wall": 0.5
+      },
+      "depth": [
+        1,
+        25
+      ],
+      "weight": 0.45,
+      "stay": [
+        50,
+        90
+      ],
+      "cooldown": 80,
+      "speed": [
+        0.2,
+        0.6
+      ],
+      "curious": 0.1,
+      "shy": 2.0,
+      "body": {
+        "h": 0.42,
+        "w": 0.2,
+        "tail": "lunate",
+        "tailSize": 0.24,
+        "dorsal": [
+          0.22,
+          0.75,
+          0.07
+        ],
+        "anal": [
+          0.22,
+          0.45,
+          0.06
+        ],
+        "pect": 0.13,
+        "hump": 1.4,
+        "snout": -0.4
+      },
+      "pattern": 4,
+      "colors": [
+        "#3c6e6a",
+        "#7fa59a",
+        "#2f5752",
+        "#a8c8b8"
+      ],
+      "swim": {
+        "freq": 2.2,
+        "amp": 0.05
+      }
+    },
+    {
+      "id": "hawksbill",
+      "nameKo": "매부리바다거북",
+      "nameEn": "Hawksbill turtle",
+      "sci": "Eretmochelys imbricata",
+      "origin": "전 세계 열대 산호초",
+      "sizeClass": "large",
+      "length": 0.8,
+      "behavior": "turtle",
+      "group": [
+        1,
+        1
+      ],
+      "habitats": {
+        "reef": 1,
+        "sand": 0.2,
+        "seagrass": 0.3,
+        "open": 0.3,
+        "wall": 0.5
+      },
+      "depth": [
+        0,
+        20
+      ],
+      "weight": 0.5,
+      "stay": [
+        60,
+        110
+      ],
+      "cooldown": 80,
+      "speed": [
+        0.2,
+        0.42
+      ],
+      "curious": 0.4,
+      "shy": 1.5,
+      "colors": [
+        "#4a2e16",
+        "#d9a24a",
+        "#7a5a32",
+        "#efe2b0"
+      ]
+    },
+    {
+      "id": "eagleray",
+      "nameKo": "점박이 독수리가오리",
+      "nameEn": "Spotted eagle ray",
+      "sci": "Aetobatus narinari",
+      "origin": "전 세계 열대",
+      "sizeClass": "large",
+      "length": 2.0,
+      "behavior": "eagle",
+      "group": [
+        2,
+        5
+      ],
+      "habitats": {
+        "reef": 0.4,
+        "sand": 0.8,
+        "seagrass": 0.3,
+        "open": 0.9,
+        "wall": 0.4
+      },
+      "depth": [
+        1,
+        30
+      ],
+      "weight": 0.38,
+      "stay": [
+        40,
+        70
+      ],
+      "cooldown": 110,
+      "speed": [
+        0.6,
+        1.0
+      ],
+      "curious": 0.2,
+      "shy": 2.5,
+      "colors": [
+        "#2b2f38",
+        "#f2f2ee",
+        "#f4f4ec"
+      ]
+    },
+    {
+      "id": "moonjelly",
+      "nameKo": "보름달물해파리",
+      "nameEn": "Moon jellyfish",
+      "sci": "Aurelia aurita",
+      "origin": "전 세계 연안",
+      "sizeClass": "medium",
+      "length": 0.32,
+      "behavior": "jelly",
+      "group": [
+        8,
+        20
+      ],
+      "habitats": {
+        "reef": 0.2,
+        "sand": 0.2,
+        "seagrass": 0.1,
+        "open": 1,
+        "wall": 0.4
+      },
+      "depth": [
+        1,
+        20
+      ],
+      "weight": 0.4,
+      "stay": [
+        60,
+        100
+      ],
+      "cooldown": 90,
+      "speed": [
+        0.02,
+        0.08
+      ],
+      "curious": 0,
+      "shy": 0,
+      "colors": [
+        "#b9d9f0",
+        "#f0bfe6",
+        "#dcefff"
+      ]
+    },
+    {
+      "id": "seanettle",
+      "nameKo": "태평양 쐐기해파리",
+      "nameEn": "Pacific sea nettle",
+      "sci": "Chrysaora fuscescens",
+      "origin": "북동태평양",
+      "sizeClass": "medium",
+      "length": 0.45,
+      "behavior": "jelly",
+      "group": [
+        3,
+        7
+      ],
+      "habitats": {
+        "reef": 0.1,
+        "sand": 0.1,
+        "seagrass": 0,
+        "open": 1,
+        "wall": 0.4
+      },
+      "depth": [
+        2,
+        25
+      ],
+      "weight": 0.3,
+      "stay": [
+        60,
+        100
+      ],
+      "cooldown": 110,
+      "speed": [
+        0.02,
+        0.08
+      ],
+      "curious": 0,
+      "shy": 0,
+      "colors": [
+        "#f2a560",
+        "#f7c890",
+        "#e88a50"
+      ]
+    }
+  ]
+}
