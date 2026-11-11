@@ -9,9 +9,12 @@ const multiplayer = (): Plugin => ({
   configurePreviewServer(server) { if (server.httpServer) attachRelay(server.httpServer); },
 });
 
+/** 외부 도메인으로 접속 허용 (Vite는 기본적으로 모르는 Host 헤더를 막음) */
+const allowedHosts = ['blue-immersion.o-r.kr', '.blue-immersion.o-r.kr'];
+
 export default defineConfig({
   plugins: [viteSingleFile(), multiplayer()],
   build: { target: 'es2020', assetsInlineLimit: 100000000, chunkSizeWarningLimit: 5000 },
-  server: { host: true },
-  preview: { host: true },
+  server: { host: true, allowedHosts },
+  preview: { host: true, allowedHosts },
 });
