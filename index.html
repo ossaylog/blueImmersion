@@ -6,8 +6,50 @@
   <meta name="theme-color" content="#0b4f6c" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>BLUE IMMERSION</title>
+  <style>
+    /* 첫 로딩 화면: 게임 코드(수백 KB)를 받기 전부터 바로 보이도록 HTML에 직접 넣음 */
+    html, body { margin: 0; background: #04121e; }
+    #boot { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; overflow: hidden; color: #eaf8ff;
+      font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", system-ui, sans-serif;
+      background: radial-gradient(120% 90% at 50% 0%, #1b7fa6 0%, #0b4f6c 38%, #062b45 70%, #031220 100%); transition: opacity 0.9s ease; }
+    #boot.done { opacity: 0; pointer-events: none; }
+    #boot .rays { position: absolute; inset: -20% -10% 30%; background: repeating-linear-gradient(100deg, rgba(255,255,255,0.07) 0 3%, transparent 3% 9%);
+      filter: blur(6px); transform-origin: 50% 0; animation: bootRay 9s ease-in-out infinite alternate; mask-image: linear-gradient(#000, transparent); -webkit-mask-image: linear-gradient(#000, transparent); }
+    #boot .bub { position: absolute; bottom: -20px; width: 8px; height: 8px; border-radius: 50%; border: 1px solid rgba(220,250,255,0.55); background: rgba(255,255,255,0.08); animation: bootBub linear infinite; }
+    #boot .box { position: relative; text-align: center; padding: 24px; }
+    #boot .t { font-size: 12px; letter-spacing: 0.42em; text-indent: 0.42em; color: rgba(220,245,255,0.7); }
+    #boot h2 { margin: 14px 0 6px; font-weight: 300; font-size: clamp(19px, 4.6vw, 26px); letter-spacing: 0.06em; }
+    #boot .dots::after { content: ""; animation: bootDots 1.5s steps(4) infinite; }
+    #boot .step { font-size: 13px; color: rgba(220,245,255,0.72); min-height: 1.4em; }
+    #boot .bar { width: min(240px, 60vw); height: 3px; margin: 18px auto 0; border-radius: 3px; background: rgba(255,255,255,0.14); overflow: hidden; position: relative; }
+    #boot .bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: linear-gradient(90deg, #5fe0e6, #bff6ff); border-radius: 3px; transition: width 0.4s ease; }
+    #boot .bar.wait i { width: 35%; animation: bootWait 1.4s ease-in-out infinite; }
+    #boot .slow { margin-top: 16px; font-size: 11.5px; color: rgba(220,245,255,0.55); opacity: 0; transition: opacity 0.8s; }
+    #boot .slow.on { opacity: 1; }
+    @keyframes bootRay { from { transform: skewX(-6deg) translateX(-3%); } to { transform: skewX(6deg) translateX(3%); } }
+    @keyframes bootBub { from { transform: translateY(0) translateX(0); opacity: 0; } 10% { opacity: 1; } to { transform: translateY(-110vh) translateX(18px); opacity: 0; } }
+    @keyframes bootDots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+    @keyframes bootWait { 0% { left: -35%; } 100% { left: 100%; } }
+  </style>
 </head>
 <body>
+  <div id="boot">
+    <div class="rays"></div>
+    <i class="bub" style="left:12%;animation-duration:7s;animation-delay:-1s"></i>
+    <i class="bub" style="left:27%;width:5px;height:5px;animation-duration:5.5s;animation-delay:-3s"></i>
+    <i class="bub" style="left:46%;width:11px;height:11px;animation-duration:8.5s;animation-delay:-5s"></i>
+    <i class="bub" style="left:63%;width:6px;height:6px;animation-duration:6s;animation-delay:-2s"></i>
+    <i class="bub" style="left:79%;animation-duration:7.5s;animation-delay:-4s"></i>
+    <i class="bub" style="left:90%;width:5px;height:5px;animation-duration:5s;animation-delay:-0.5s"></i>
+    <div class="box">
+      <div class="t">BLUE IMMERSION</div>
+      <h2>바다를 불러오고 있어요<span class="dots"></span></h2>
+      <div class="step" id="bootStep">물결을 내려받는 중</div>
+      <div class="bar wait" id="bootBar"><i></i></div>
+      <div class="slow" id="bootSlow">처음 들어올 땐 조금 걸릴 수 있어요 · 잠시만 기다려 주세요</div>
+    </div>
+  </div>
+  <script>setTimeout(function () { var e = document.getElementById('bootSlow'); if (e && document.getElementById('boot')) e.className = 'slow on'; }, 6000);</script>
   <canvas id="scene"></canvas>
   <div id="ui"></div>
   <script type="module" src="/src/main.ts"></script>

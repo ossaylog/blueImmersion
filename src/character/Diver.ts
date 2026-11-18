@@ -3,7 +3,7 @@
 //  최종 에셋(GLB 스킨드 메시)으로 교체 시: 같은 Bone 이름(joints)과 슬롯 이름을 유지하면 로직 재사용 가능
 import * as THREE from 'three';
 import { patchWater } from '../water/WaterShading';
-import { damp, clamp } from '../core/math';
+import { damp, clamp, disposeTree } from '../core/math';
 
 export type Motion = 'idle' | 'fwd' | 'back' | 'turnL' | 'turnR';
 export type Pose = 'stand' | 'walk' | 'swim' | 'float' | 'hover' | 'stride' | 'duck' | 'gearUp' | 'tread'
@@ -14,8 +14,28 @@ export type Pose = 'stand' | 'walk' | 'swim' | 'float' | 'hover' | 'stride' | 'd
 /** 장비 이름 순서 (멀티유저 동기화 비트마스크) */
 export const GEAR_ORDER = ['mask', 'snorkel', 'bcd', 'tank', 'hose', 'regulator', 'weights', 'computer', 'finL', 'finR'];
 const IK_POSES = new Set<Pose>(['steps', 'sit', 'sitFins']);
-const L1 = 0.43, L2 = 0.42;
+// 체형: 머리가 크고 팔다리가 짧은 아담한 2.8등신 (전체 키 약 1.2m)
+//  관절 길이는 몸 기준 단위, 화면에서는 BODY_SCALE 배로 그려짐
+const L1 = 0.26, L2 = 0.25;        // 허벅지 · 정강이
+const SOLE = 0.065;                // 발목 → 발바닥
+export const BODY_SCALE = 0.76;
+/** 똑바로 섰을 때 바닥 → 골반 높이 (월드 m) · 계단에선 무릎을 조금 굽힘 */
+const HIP_DROP = 0.03;             // 골반 기준점 → 고관절 (아래로)
+/** 똑바로 섰을 때 기준점 높이: 고관절이 기준점보다 HIP_DROP 아래에 있으므로 그만큼 더해 다리가 곧게 펴지게 */
+export const HIP_STAND = BODY_SCALE * (L1 + L2 + SOLE + HIP_DROP) + 0.002;
+export const HIP_STAIR = HIP_STAND - 0.028;
 const _t = new THREE.Vector3();
+/** 장비 맞춤 (부모 관절 기준 위치 · 크기) */
+const GEAR_FIT: Record<string, { pos?: THREE.Vector3; scale: [number, number, number] }> = {
+  mask: { pos: new THREE.Vector3(0, 0.205, 0.238), scale: [1.9, 1.9, 1.9] },
+  snorkel: { pos: new THREE.Vector3(-0.27, 0.2, 0.04), scale: [1.7, 1.7, 1.7] },
+  regulator: { pos: new THREE.Vector3(0, 0.11, 0.25), scale: [1.6, 1.6, 1.6] },
+  tank: { pos: new THREE.Vector3(0, 0.2, -0.29), scale: [0.8, 0.8, 0.8] },
+  bcd: { pos: new THREE.Vector3(0, -0.02, 0), scale: [1.3, 0.8, 1.25] },
+  hose: { pos: new THREE.Vector3(0, 0, 0), scale: [1, 0.85, 1.2] },
+  weights: { pos: new THREE.Vector3(0, 0.04, 0), scale: [1.25, 1.25, 1.3] },
+  computer: { pos: new THREE.Vector3(0, -0.13, 0.055), scale: [1.3, 1.3, 1.3] },
+};
 export type GearSet = 'none' | 'snorkel' | 'scuba';
 
 const LEG_JOINTS = new Set(['hipL', 'hipR', 'kneeL', 'kneeR', 'ankleL', 'ankleR']);
@@ -23,18 +43,19 @@ const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const m = (c: string, r = 0.6, metal = 0, extra: THREE.MeshStandardMaterialParameters = {}) =>
   patchWater(new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: metal, ...extra }), { key: 'diver' });
 
+/**
+ * 관절에서 -y 방향으로 뻗는 매끈한 팔다리 (관절 → 관절)
+ *  양 끝이 관절 위치를 중심으로 한 완전한 반구(반지름 r0 / r1)라서,
+ *  이어지는 두 마디의 관절 반지름을 같게 맞추면 굽혀도 이음매·주름 없이 매끈하게 이어짐
+ */
 function limb(len: number, r0: number, r1: number, mat: THREE.Material) {
-  // 관절에서 -y 방향으로 뻗는 테이퍼 캡슐
-  const g = new THREE.CapsuleGeometry((r0 + r1) / 2, len - (r0 + r1) / 2, 4, 12);
-  const pos = g.attributes.position as THREE.BufferAttribute;
-  for (let i = 0; i < pos.count; i++) {
-    const y = pos.getY(i);
-    const t = THREE.MathUtils.clamp((y + len / 2) / len, 0, 1); // 0 아래 → 1 위
-    const k = THREE.MathUtils.lerp(r1, r0, t) / ((r0 + r1) / 2);
-    pos.setX(i, pos.getX(i) * k); pos.setZ(i, pos.getZ(i) * k);
-  }
+  const pts: THREE.Vector2[] = [];
+  const N = 10;
+  // 아래 끝(극점) → 아래 반구 → 옆선 → 위 반구 → 위 끝(극점)
+  for (let i = 0; i <= N; i++) { const a = (i / N) * Math.PI / 2; pts.push(new THREE.Vector2(Math.max(1e-4, r1 * Math.sin(a)), -len - r1 * Math.cos(a))); }
+  for (let i = 0; i <= N; i++) { const a = Math.PI / 2 - (i / N) * Math.PI / 2; pts.push(new THREE.Vector2(Math.max(1e-4, r0 * Math.sin(a)), r0 * Math.cos(a))); }
+  const g = new THREE.LatheGeometry(pts, 20);
   g.computeVertexNormals();
-  g.translate(0, -len / 2, 0);
   return new THREE.Mesh(g, mat);
 }
 
@@ -62,6 +83,9 @@ export class Diver {
   lean = 0;
   /** 발 내려다보기 (계단) */
   lookDown = 0;
+  /** 손 인사: 남은 시간 / 팔을 든 정도(0~1) / 흔드는 주기 */
+  private waveT = 0; private waveW = 0; private waveP = 0;
+  get waving() { return this.waveT > 0; }
   /** 오리발을 신는 쪽 다리 (sitFins): 0 = hipL, 1 = hipR */
   finLeg = 0;
   gearSet: GearSet = 'none';
@@ -71,6 +95,7 @@ export class Diver {
   private suitTarget = 0;
   finTips: THREE.Group[] = [];
   bubbleOrigin = new THREE.Object3D();
+  private headRef = new THREE.Object3D();
   mats = {
     skin: m('#d9a888', 0.65), hair: m('#2a1f1a', 0.8), rash: m('#173a5e', 0.7), rashAccent: m('#2bb3b1', 0.6),
     shorts: m('#0f2440', 0.75), suit: m('#15181c', 0.55), suitAccent: m('#1f6fd0', 0.5),
@@ -90,57 +115,86 @@ export class Diver {
 
   private build() {
     const { skin, hair, rash, rashAccent, shorts, suit, suitAccent } = this.mats;
+    this.body.scale.setScalar(BODY_SCALE);
     const pelvis = this.joint('pelvis', this.body, V3());
-    const hipMesh = limb(0.22, 0.17, 0.155, shorts); hipMesh.position.y = 0.1; hipMesh.scale.set(1.12, 1, 0.82); pelvis.add(hipMesh);
-    const spine = this.joint('spine', pelvis, V3(0, 0.1, 0));
-    const chest = this.joint('chest', spine, V3(0, 0.22, 0));
-    const torso = limb(0.42, 0.17, 0.15, rash); torso.position.y = 0.3; torso.scale.set(1.18, 1, 0.78); chest.add(torso);
-    const panel = limb(0.36, 0.172, 0.152, rashAccent); panel.position.y = 0.27; panel.scale.set(1.19, 1, 0.5); panel.position.z = -0.005; chest.add(panel);
-    const neck = this.joint('neck', chest, V3(0, 0.33, 0.01));
-    const neckMesh = limb(0.12, 0.055, 0.06, skin); neckMesh.position.y = 0.1; neck.add(neckMesh);
-    const head = this.joint('head', neck, V3(0, 0.1, 0.0));
-    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.105, 24, 18), skin); skull.scale.set(0.92, 1.12, 1.02); skull.position.set(0, 0.1, 0.01); head.add(skull);
-    const hairM = new THREE.Mesh(new THREE.SphereGeometry(0.11, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hair); hairM.scale.set(0.96, 1.1, 1.06); hairM.position.set(0, 0.115, -0.005); hairM.rotation.x = -0.25; head.add(hairM);
-    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), skin); nose.position.set(0, 0.085, 0.11); head.add(nose);
+    // 동글동글한 배와 엉덩이
+    const hipMesh = limb(0.02, 0.2, 0.185, shorts); hipMesh.position.y = 0.0; hipMesh.scale.set(1.12, 1, 0.92); pelvis.add(hipMesh);
+    const spine = this.joint('spine', pelvis, V3(0, 0.08, 0));
+    const chest = this.joint('chest', spine, V3(0, 0.16, 0));
+    const torso = limb(0.145, 0.2, 0.215, rash); torso.position.y = 0.16; torso.scale.set(1.12, 1, 0.9); chest.add(torso);
+    const panel = limb(0.091, 0.202, 0.217, rashAccent); panel.position.y = 0.133; panel.scale.set(1.13, 1, 0.55); panel.position.z = -0.005; chest.add(panel);
+    const neck = this.joint('neck', chest, V3(0, 0.27, 0.01));
+    const neckMesh = limb(0.02, 0.08, 0.082, skin); neckMesh.position.y = 0.04; neck.add(neckMesh);
+    const head = this.joint('head', neck, V3(0, 0.05, 0.0));
+    // 크고 둥근 머리
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.26, 32, 24), skin); skull.scale.set(1, 0.95, 0.96); skull.position.set(0, 0.22, 0.01); head.add(skull);
+    const hairM = new THREE.Mesh(new THREE.SphereGeometry(0.268, 32, 14, 0, Math.PI * 2, 0, Math.PI * 0.52), hair); hairM.scale.set(1, 0.97, 0.98); hairM.position.set(0, 0.235, -0.012); hairM.rotation.x = -0.32; head.add(hairM);
+    // 얼굴: 동그란 눈 · 작은 코 · 볼터치 · 웃는 입
+    const eyeM = m('#1d1712', 0.35), blushM = m('#f08c84', 0.8, 0, { transparent: true, opacity: 0.55 });
+    for (const s of [-1, 1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.024, 12, 10), eyeM); eye.scale.set(0.8, 1.15, 0.5); eye.position.set(s * 0.085, 0.215, 0.235); head.add(eye);
+      const blush = new THREE.Mesh(new THREE.SphereGeometry(0.036, 12, 8), blushM); blush.scale.set(1.2, 0.7, 0.35); blush.position.set(s * 0.145, 0.15, 0.2); blush.rotation.y = s * 0.55; head.add(blush);
+    }
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 8), skin); nose.position.set(0, 0.165, 0.252); head.add(nose);
+    const smile = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.006, 6, 16, Math.PI), m('#7a3b30', 0.6)); smile.rotation.z = Math.PI; smile.position.set(0, 0.12, 0.236); head.add(smile);
+    // 머리 기준점 (카메라·이름표·기포가 참조): 머리 아래쪽 중앙
+    this.headRef.position.set(0, 0.12, 0); head.add(this.headRef);
 
     for (const s of [-1, 1]) {
       const L = s < 0 ? 'L' : 'R';
-      const sh = this.joint('shoulder' + L, chest, V3(s * 0.2, 0.27, 0));
-      const sleeve = limb(0.14, 0.058, 0.052, rash); sh.add(sleeve);
-      const ua = limb(0.28, 0.048, 0.04, skin); sh.add(ua);
-      const el = this.joint('elbow' + L, sh, V3(0, -0.28, 0));
-      el.add(limb(0.25, 0.04, 0.032, skin));
-      const hand = this.joint('hand' + L, el, V3(0, -0.25, 0));
-      const hm = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), skin); hm.scale.set(0.6, 1.3, 0.9); hm.position.y = -0.05; hand.add(hm);
+      const sh = this.joint('shoulder' + L, chest, V3(s * 0.22, 0.2, 0));
+      // 소매: 어깨 관절 구(팔 위쪽 끝)를 완전히 덮고, 몸통과 이어지는 어깨 덮개까지 (어깨 살이 비치지 않게)
+      const sleeve = limb(0.07, 0.08, 0.072, rash); sh.add(sleeve);
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), rash); cap.position.set(-s * 0.03, 0.012, 0); cap.scale.set(1, 0.9, 0.95); sh.add(cap);
+      const ua = limb(0.19, 0.058, 0.052, skin); sh.add(ua);
+      const el = this.joint('elbow' + L, sh, V3(0, -0.19, 0));
+      el.add(limb(0.16, 0.052, 0.048, skin));
+      const hand = this.joint('hand' + L, el, V3(0, -0.16, 0));
+      // 동그란 주먹손
+      const hm = new THREE.Mesh(new THREE.SphereGeometry(0.068, 14, 10), skin); hm.scale.set(0.92, 1, 0.9); hm.position.y = -0.035; hand.add(hm);
 
-      const hip = this.joint('hip' + L, pelvis, V3(s * 0.095, -0.02, 0));
-      const shortLeg = limb(0.3, 0.082, 0.07, shorts); hip.add(shortLeg);
-      hip.add(limb(0.43, 0.075, 0.052, skin));
-      const knee = this.joint('knee' + L, hip, V3(0, -0.43, 0));
-      knee.add(limb(0.42, 0.05, 0.034, skin));
-      const ankle = this.joint('ankle' + L, knee, V3(0, -0.42, 0));
-      const foot = new THREE.Mesh(new THREE.CapsuleGeometry(0.035, 0.14, 4, 8), skin); foot.rotation.x = Math.PI / 2; foot.position.set(0, -0.03, 0.06); ankle.add(foot);
+      const hip = this.joint('hip' + L, pelvis, V3(s * 0.1, -HIP_DROP, 0));
+      const shortLeg = limb(0.1, 0.105, 0.095, shorts); shortLeg.position.y = -0.055; hip.add(shortLeg);
+      hip.add(limb(L1, 0.092, 0.074, skin));
+      const knee = this.joint('knee' + L, hip, V3(0, -L1, 0));
+      knee.add(limb(L2, 0.074, 0.06, skin));
+      const ankle = this.joint('ankle' + L, knee, V3(0, -L2, 0));
+      // 통통한 발 (발바닥이 발목보다 SOLE 아래)
+      const foot = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.1, 4, 10), skin); foot.rotation.x = Math.PI / 2; foot.position.set(0, -SOLE + 0.055, 0.045); ankle.add(foot);
 
       // 다이빙 슈트 오버레이 (스쿠버 선택 시 발끝부터 순서대로 덮임)
       const suitAdd = (rank: number, parent: THREE.Object3D, len: number, r0: number, r1: number, mat: THREE.Material, y = 0) => {
         const mesh = limb(len, r0, r1, mat); mesh.position.y = y; mesh.visible = false; parent.add(mesh); this.suitParts.push({ mesh, rank }); return mesh;
       };
-      suitAdd(0, ankle, 0.08, 0.042, 0.04, suit, 0.02);
-      suitAdd(1, knee, 0.43, 0.056, 0.04, suit);
-      suitAdd(2, hip, 0.44, 0.088, 0.058, suit);
-      suitAdd(5, sh, 0.29, 0.062, 0.046, suit);
-      suitAdd(6, el, 0.25, 0.046, 0.037, suit);
+      suitAdd(0, ankle, 0.04, 0.069, 0.066, suit, 0.0);
+      suitAdd(1, knee, L2, 0.083, 0.069, suit);
+      suitAdd(2, hip, L1, 0.104, 0.083, suit);
+      suitAdd(5, sh, 0.19, 0.086, 0.061, suit);
+      const sCap = suitAdd(4.6, sh, 0.0, 0.098, 0.098, suit); sCap.position.set(-s * 0.03, 0.012, 0);
+      suitAdd(6, el, 0.16, 0.061, 0.057, suit);
       void L;
     }
-    const st = limb(0.24, 0.182, 0.165, suit); st.position.y = 0.11; st.scale.set(1.12, 1, 0.84); st.visible = false; pelvis.add(st); this.suitParts.push({ mesh: st, rank: 3 });
-    const sc = limb(0.44, 0.18, 0.162, suit); sc.position.y = 0.31; sc.scale.set(1.19, 1, 0.82); sc.visible = false; chest.add(sc); this.suitParts.push({ mesh: sc, rank: 4 });
-    const sa = limb(0.3, 0.184, 0.164, suitAccent); sa.position.set(0, 0.28, 0); sa.scale.set(1.2, 1, 0.3); sa.visible = false; chest.add(sa); this.suitParts.push({ mesh: sa, rank: 4.3 });
-    // 스노클 마스크/레귤레이터 기포 원점
-    this.bubbleOrigin.position.set(0, 0.06, 0.16); head.add(this.bubbleOrigin);
+    const st = limb(0.02, 0.212, 0.197, suit); st.position.y = 0.0; st.scale.set(1.12, 1, 0.94); st.visible = false; pelvis.add(st); this.suitParts.push({ mesh: st, rank: 3 });
+    const sc = limb(0.163, 0.21, 0.225, suit); sc.position.y = 0.169; sc.scale.set(1.13, 1, 0.92); sc.visible = false; chest.add(sc); this.suitParts.push({ mesh: sc, rank: 4 });
+    const sa = limb(0.097, 0.214, 0.229, suitAccent); sa.position.set(0, 0.136, 0); sa.scale.set(1.14, 1, 0.35); sa.visible = false; chest.add(sa); this.suitParts.push({ mesh: sa, rank: 4.3 });
+    // 스노클 마스크/레귤레이터 기포 원점 (입 앞)
+    this.bubbleOrigin.position.set(0, 0.11, 0.3); head.add(this.bubbleOrigin);
   }
 
   // ───────── 장비 ─────────
+  /** 장비를 아담한 체형(큰 머리·짧은 몸통)에 맞춰 크기·위치 조정 (부착 연출이 바깥 그룹 크기를 쓰므로 안쪽에 적용) */
   private makeGear(name: string): { obj: THREE.Object3D; parent: THREE.Object3D } {
+    const r = this.makeGearRaw(name);
+    const fit = GEAR_FIT[name];
+    if (!fit) return r;
+    const outer = new THREE.Group();
+    outer.position.copy(fit.pos ?? r.obj.position);
+    r.obj.position.set(0, 0, 0);
+    r.obj.scale.set(...fit.scale);
+    outer.add(r.obj);
+    return { obj: outer, parent: r.parent };
+  }
+  private makeGearRaw(name: string): { obj: THREE.Object3D; parent: THREE.Object3D } {
     const black = m('#16191c', 0.5), frameC = this.gearSet === 'snorkel' ? m('#1fa2c8', 0.4) : m('#1d1f22', 0.45);
     const glass = m('#a9d4e0', 0.05, 0.1, { transparent: true, opacity: 0.35 });
     const g = new THREE.Group();
@@ -255,7 +309,8 @@ export class Diver {
 
   /** 모든 장비 해제 → 기본 수영복 */
   clearGear() {
-    for (const [, s] of this.slots) s.obj.removeFromParent();
+    // 장비는 붙일 때마다 새로 만들므로, 뗄 때 GPU 메모리도 해제 (다른 접속자의 장비 변경마다 쌓이던 누수)
+    for (const [, s] of this.slots) disposeTree(s.obj);
     this.slots.clear();
     this.finTips = [];
     this.setSuit(false, true);
@@ -267,7 +322,7 @@ export class Diver {
   detach(name: string) {
     const s = this.slots.get(name);
     if (!s) return;
-    s.obj.removeFromParent();
+    disposeTree(s.obj);
     this.slots.delete(name);
     if (name === 'finL' || name === 'finR') this.finTips = this.finTips.filter((f) => f.parent && f.parent.parent);
   }
@@ -275,6 +330,9 @@ export class Diver {
   get suitOn() { return this.suitTarget > 0.5; }
 
   private setT(name: string, x: number, y = 0, z = 0) { this.targets[name] = [x, y, z]; }
+
+  /** 오른손을 들어 흔들기 (판툰·물속 어디서나, 걷거나 헤엄치는 중에도 팔만) */
+  startWave(dur = 2.4) { if (this.waveT <= 0) this.waveP = 0; this.waveT = Math.max(this.waveT, dur); }
 
   update(dt: number, t: number) {
     // 장비 부착 애니메이션
@@ -419,6 +477,14 @@ export class Diver {
       this.setT('spine', breath * 0.015 + (P === 'duck' ? 0.4 : 0));
       if (P === 'duck') pitchT = Math.PI / 2 + 0.75;
     }
+    // 손 인사: 오른팔을 옆·위로 들고(어깨 z), 팔뚝을 세워(팔꿈치 z) 좌우로 흔듦 — 다른 포즈 위에 덮어씀
+    this.waveT = Math.max(0, this.waveT - dt);
+    this.waveW = damp(this.waveW, this.waveT > 0.25 ? 1 : 0, 7, dt);
+    //  엎드려 헤엄칠 때(몸이 수평)는 머리 앞쪽이 아니라 옆·위(물 위쪽)로 들어야 주변에서 잘 보임 → 몸 기울기에 따라 섞음
+    if (this.waveT > 0.25) {
+      const k = THREE.MathUtils.clamp(this.bodyPitch / (Math.PI / 2), 0, 1);
+      this.setT('shoulderR', 0.2 + k * 1.3, 0, 1.7 - k * 0.8); this.setT('elbowR', -0.2 - k * 0.15, 0, 1.35 - k * 1.95);
+    }
     this.bodyPitch = damp(this.bodyPitch, pitchT, P === 'stride' ? 1.5 : IK_POSES.has(P) ? 6 : P === 'lie' ? 2.2 : 3, dt);
     this.body.rotation.set(this.bodyPitch, 0, 0);
     for (const k in this.targets) {
@@ -427,6 +493,11 @@ export class Diver {
       e.x = damp(e.x, tg[0], rate, dt);
       e.y = damp(e.y, tg[1], rate, dt); e.z = damp(e.z, tg[2], rate, dt);
       this.j[k].rotation.copy(e);
+    }
+    if (this.waveW > 0.01) {
+      this.waveP += dt * 10.5;
+      this.j.elbowR.rotation.z += Math.sin(this.waveP) * 0.5 * this.waveW;
+      this.j.shoulderR.rotation.z += Math.sin(this.waveP - 0.7) * 0.07 * this.waveW;
     }
     if (IK_POSES.has(P) && this.feetW) this.solveLegs();
     // 오리발 끝의 탄성 (발목 움직임보다 늦게 따라옴)
@@ -443,10 +514,11 @@ export class Diver {
     (['L', 'R'] as const).forEach((side, i) => {
       const hip = this.j['hip' + side];
       const d = pelvis.worldToLocal(_t.copy(this.feetW![i]));
-      // 발바닥 → 발목 (발목은 발바닥보다 6.5cm 위, 발 중심보다 6cm 뒤)
-      d.y += 0.065; d.z -= 0.06;
+      // 발바닥 → 발목 (발목은 발바닥보다 SOLE 위, 발 중심보다 조금 뒤)
+      d.y += SOLE; d.z -= 0.045;
       d.sub(hip.position);
-      const D = clamp(Math.hypot(d.y, d.z), 0.25, L1 + L2 - 0.003);
+      // 다리가 짧아 여유가 조금만 있어도 무릎이 크게 굽음 → 거의 끝까지 펴지게 (0.3mm)
+      const D = clamp(Math.hypot(d.y, d.z), 0.14, L1 + L2 - 0.0003);
       const aLine = Math.atan2(-d.z, -d.y);
       const alpha = Math.acos(clamp((L1 * L1 + D * D - L2 * L2) / (2 * L1 * D), -1, 1));
       const hx = aLine - alpha;
@@ -522,5 +594,5 @@ export class Diver {
 
   /** 엎드렸을 때 몸 중심 (카메라 타깃) */
   chestWorld(out = new THREE.Vector3()) { return this.j.chest.getWorldPosition(out); }
-  headWorld(out = new THREE.Vector3()) { return this.j.head.getWorldPosition(out); }
+  headWorld(out = new THREE.Vector3()) { return this.headRef.getWorldPosition(out); }
 }

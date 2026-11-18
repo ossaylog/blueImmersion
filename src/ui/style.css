@@ -118,7 +118,14 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 /* 터치 조작 */
 .touch-layer { position: absolute; inset: 0; pointer-events: none; display: none; }
 .touch .touch-layer.on { display: block; }
-.joy-zone { position: absolute; left: 0; bottom: 0; width: 40%; height: 56%; pointer-events: auto; touch-action: none; }
+.joy-zone { position: absolute; left: 0; bottom: 0; width: 46%; height: min(62%, calc(100% - 186px)); touch-action: none; pointer-events: auto; touch-action: none; }
+/* 판툰 위에선 조이스틱 대신 화면을 눌러 걸어감 */
+body.phase-deck .joy-zone { display: none; }
+#zoneSel { z-index: 2; }
+/* 숨겨진(투명한) 시점 선택 카드가 화면 탭을 가로채지 않게 */
+#zoneSel:not(.show), #zoneSel:not(.show) * { pointer-events: none !important; visibility: hidden; }
+#zoneSel { transition: opacity 0.4s, visibility 0.4s; }
+.touch-layer { z-index: 1; }
 .joy-base { position: absolute; left: max(36px, calc(env(safe-area-inset-left) + 20px)); bottom: max(36px, calc(env(safe-area-inset-bottom) + 20px)); width: 128px; height: 128px; margin: 0; border-radius: 50%; background: rgba(255,255,255,0.08); border: 1.5px solid rgba(255,255,255,0.28); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: opacity 0.3s; opacity: 0.7; }
 .joy-knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; background: rgba(255,255,255,0.32); border: 1px solid rgba(255,255,255,0.55); }
 .joy-base.active { opacity: 1; }
@@ -160,7 +167,8 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 }
 
 #hud .keys:empty { display: none; }
-body.phase-hud #mute { left: auto !important; bottom: auto !important; right: max(486px, calc(env(safe-area-inset-right) + 476px)); top: max(14px, env(safe-area-inset-top)); }
+#mute { position: absolute; left: max(14px, env(safe-area-inset-left)); bottom: max(14px, env(safe-area-inset-bottom)); z-index: 3; }
+#hud .top-right #mute { position: static; order: 9; }
 
 /* 멀티유저: 접속 인원 + 머리 위 닉네임 */
 #tags { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
@@ -249,7 +257,7 @@ body:not(.phase-hud) #mp { top: max(14px, env(safe-area-inset-top)); }
 #codex .panel::-webkit-scrollbar-track { background: transparent; }
 
 /* 판툰 위: 수중 전용 버튼 숨김 */
-body.phase-deck #hud [data-act="return"] { display: none; }
+body.phase-deck #hud [data-act="return"], body.phase-deck #hud [data-act="view"] { display: none !important; }
 #hud .prompt { position: absolute; left: 50%; bottom: calc(9% + 46px); transform: translateX(-50%); padding: 8px 16px; border-radius: 12px; background: rgba(255, 211, 107, 0.18); border: 1px solid rgba(255, 211, 107, 0.6); font-size: 13.5px; color: #fff3cf; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
 #hud .prompt.show { opacity: 1; }
 .touch #hud .prompt { display: none; }
@@ -286,3 +294,86 @@ body.phase-deck #hud [data-act="return"] { display: none; }
   #mapView canvas { max-height: 72vh; width: auto; margin: 0 auto; }
   #minimap { width: 92px; height: 92px; top: max(96px, calc(env(safe-area-inset-top) + 84px)); }
 }
+
+/* ───────── 모바일 HUD: 겹치지 않게 정리 ─────────
+   왼쪽 위 = 수심·숨·다이브 컴퓨터 / 오른쪽 위 = 아이콘 버튼 줄 → 그 아래 미니맵 → 접속 인원
+   왼쪽 아래 = 조이스틱 / 오른쪽 아래 = 상승·하강 버튼 / 가운데 아래 = 안내 문구 */
+.icon-btn > i { font-style: normal; }
+@media (max-width: 760px), (max-height: 520px) {
+  #hud .top-right { gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100vw - 186px); }
+  #hud .top-right .icon-btn { width: 44px; height: 44px; padding: 3px 0 0; gap: 1px; flex-direction: column; justify-content: center; font-size: 17px; line-height: 1; border-radius: 14px; }
+  #hud .top-right .icon-btn .lb, #hud .top-right .codex-btn b { display: none; }
+  #hud .top-right .icon-btn::after { content: attr(data-s); font-size: 9.5px; letter-spacing: 0; color: var(--muted); }
+  body.phase-deck #hud .top-right [data-act="return"] { display: none; }
+  #snDepth { min-width: 104px; padding: 7px 11px; font-size: 15px; }
+  .act { gap: 10px; }
+  .act button { width: 58px; height: 58px; }
+  #hud .hint { white-space: normal; text-align: center; line-height: 1.45; border-radius: 16px; max-width: min(92vw, 520px); }
+  #discover { top: auto; bottom: 14px; }
+  #zoneSel .disc { display: none; }
+  #zoneSel h3 { font-size: 16px; margin: 4px 0 10px; }
+  #zoneSel .vcard { padding: 12px; }
+  #zoneSel .vcard b { font-size: 16px; margin-bottom: 3px; }
+  #zoneSel .later { margin-top: 8px; padding: 8px 14px; }
+}
+/* 세로 화면: 버튼 3개씩 두 줄 → 미니맵 · 접속 인원은 그 아래 */
+@media (max-width: 560px) and (orientation: portrait) {
+  #hud .top-right { max-width: 150px; }
+  #minimap { top: max(116px, calc(env(safe-area-inset-top) + 102px)) !important; }
+  body.phase-hud #mp { top: max(220px, calc(env(safe-area-inset-top) + 206px)); }
+  #mp .chip { max-width: 46vw; }
+  .touch.phase-swim #hud .hint { bottom: 210px; }
+  .touch.phase-deck #hud .hint { bottom: 24px; }
+}
+/* 가로 화면(폰): 버튼 한 줄 → 미니맵 · 접속 인원 / 상승·하강 버튼은 가로로 */
+@media (orientation: landscape) and (max-height: 520px) {
+  #zoneSel { width: min(400px, 50vw); padding: 14px; }
+  #zoneSel .vcard span { display: none; }
+  #minimap { top: max(66px, calc(env(safe-area-inset-top) + 52px)) !important; }
+  body.phase-hud #mp { top: max(164px, calc(env(safe-area-inset-top) + 150px)); }
+  #mp .chip { max-width: 34vw; }
+  .act { flex-direction: row; align-items: flex-end; }
+  .touch #hud .hint { bottom: max(12px, env(safe-area-inset-bottom)); max-width: calc(100vw - 440px); min-width: 200px; font-size: 12.5px; }
+  .touch.phase-deck #hud .hint { max-width: 70vw; }
+  #dc .rate { display: none; }
+}
+
+/* ───────── 채팅 · 손 인사 ───────── */
+.badge { display: none; position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #ff6b6b; color: #fff; font-size: 10.5px; font-weight: 700; line-height: 18px; text-align: center; font-style: normal; box-shadow: 0 2px 6px rgba(0,0,0,0.35); }
+.badge.on { display: block; }
+.icon-btn.soc, .act button.soc { position: relative; }
+#hud .top-right .codex-btn b.badge { display: none; }
+.touch #hud .top-right .soc { display: none; }
+.act button.soc { font-size: 11px; }
+#hud .top-right .soc .badge.on { display: block; }
+
+#chat { position: absolute; left: max(14px, env(safe-area-inset-left)); bottom: max(14px, env(safe-area-inset-bottom)); width: min(360px, calc(100vw - 28px)); height: min(46vh, 420px); display: flex; flex-direction: column; background: var(--glass-strong); z-index: 5; opacity: 0; transform: translateY(12px); pointer-events: none; transition: opacity 0.25s, transform 0.25s; }
+#chat.show { opacity: 1; transform: none; pointer-events: auto; }
+#chat header { display: flex; align-items: center; gap: 8px; padding: 10px 10px 8px 14px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+#chat header small { color: var(--muted); font-size: 11.5px; }
+#chat header .x { margin-left: auto; width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,0.1); font-size: 13px; }
+#chatLog { flex: 1; overflow-y: auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; overscroll-behavior: contain; touch-action: pan-y; user-select: text; -webkit-user-select: text; }
+#chatLog .empty { margin: auto; color: var(--muted); font-size: 12.5px; text-align: center; }
+#chatLog .m { font-size: 13px; line-height: 1.45; word-break: break-word; overflow-wrap: anywhere; }
+#chatLog .m b { font-weight: 600; margin-right: 6px; font-size: 12px; }
+#chatLog .m.mine b { color: var(--aqua); }
+#chatLog .m time { margin-left: 6px; font-size: 10px; color: var(--muted); }
+#chatForm { display: flex; gap: 6px; padding: 8px 10px 4px; }
+#chatIn { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,0.1); color: var(--text); font: inherit; font-size: 16px; outline: none; user-select: text; -webkit-user-select: text; }
+#chatIn:focus { border-color: var(--aqua); }
+#chatIn::placeholder { color: rgba(220,245,255,0.5); font-size: 13px; }
+#chatForm button { height: 38px; padding: 0 14px; border-radius: 999px; background: linear-gradient(135deg, rgba(95, 224, 230, 0.9), rgba(40, 150, 210, 0.9)); color: #022333; font-weight: 600; font-size: 13px; }
+#chat .rule { padding: 2px 14px 10px; font-size: 10.5px; color: var(--muted); line-height: 1.4; }
+#chat .rule.warn { color: var(--warn); font-size: 11.5px; }
+/* 머리 위 말풍선 */
+.ntag .say { position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%) scale(0.9); max-width: 220px; width: max-content; padding: 5px 10px; border-radius: 12px; background: rgba(255,255,255,0.92); color: #0b2233; font-style: normal; font-size: 12.5px; line-height: 1.35; white-space: normal; text-shadow: none; opacity: 0; transition: opacity 0.3s, transform 0.3s; overflow-wrap: anywhere; }
+.ntag .say::after { content: ""; position: absolute; left: 50%; top: 100%; margin-left: -5px; border: 5px solid transparent; border-top-color: rgba(255,255,255,0.92); }
+.ntag.saying .say { opacity: 1; transform: translateX(-50%); }
+/* 터치 화면: 채팅창은 위쪽에 (키보드가 아래에서 올라오므로), 키보드가 올라오면 보이는 영역에 맞춤 */
+.touch #chat { left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); width: auto; top: calc(var(--vvt, 0px) + max(8px, env(safe-area-inset-top))); bottom: auto; height: min(52vh, calc(var(--vvh, 100vh) - 16px)); transform: translateY(-12px); }
+.touch #chat.show { transform: none; }
+@media (orientation: landscape) and (max-height: 520px) {
+  .touch #chat { right: auto; width: min(420px, 56vw); height: calc(var(--vvh, 100vh) - 16px); }
+}
+.touch.chat-open #hud .hint { opacity: 0; }
+.touch #chat { background: rgba(5, 22, 36, 0.9); }

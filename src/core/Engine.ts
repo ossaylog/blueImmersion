@@ -25,6 +25,7 @@ export class Engine {
   onContextLost?: () => void;
   onContextRestored?: () => void;
   fps = 60;
+  contextLost = false;
 
   constructor(canvas: HTMLCanvasElement, public q: Quality) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
@@ -140,8 +141,9 @@ export class Engine {
     this.postScene.add(this.post);
     addEventListener('resize', () => this.resize());
     // 모바일에서 GPU 메모리가 부족하면 WebGL 컨텍스트가 사라질 수 있음 → 멈춘 화면 대신 복구 시도
-    canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.onContextLost?.(); });
-    canvas.addEventListener('webglcontextrestored', () => this.onContextRestored?.());
+    // preventDefault → 브라우저가 컨텍스트를 복구해 줌 · three.js가 버퍼·텍스처·셰이더를 다시 올림
+    canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.contextLost = true; this.onContextLost?.(); });
+    canvas.addEventListener('webglcontextrestored', () => { this.contextLost = false; this.onContextRestored?.(); });
     this.resize();
   }
 
@@ -154,11 +156,26 @@ export class Engine {
     this.postU.uAspect.value = w / h;
   }
 
+  /** 적응형 해상도: 프레임이 떨어지면 산호·물고기 수 대신 렌더 해상도를 먼저 낮춤 (모바일 GPU는 픽셀 수가 병목) */
+  private dpr = 0; private slowT = 0; private fastT = 0;
+  private adapt(dt: number) {
+    if (!this.dpr) this.dpr = this.q.pixelRatio;
+    if (dt > 0.09) return; // 탭 전환·로딩 끊김은 무시
+    const min = this.q.tier === 'high' ? 1 : 0.75;
+    if (this.fps < 40) { this.slowT += dt; this.fastT = 0; } else if (this.fps > 56) { this.fastT += dt; this.slowT = 0; } else { this.slowT = 0; this.fastT = 0; }
+    let next = this.dpr;
+    if (this.slowT > 2.5 && this.dpr > min) next = Math.max(min, this.dpr - 0.15);
+    else if (this.fastT > 8 && this.dpr < this.q.pixelRatio) next = Math.min(this.q.pixelRatio, this.dpr + 0.1);
+    if (next !== this.dpr) { this.dpr = next; this.slowT = 0; this.fastT = 0; this.renderer.setPixelRatio(next); this.resize(); }
+  }
+  get renderScale() { return this.dpr || this.q.pixelRatio; }
+
   start() {
     const loop = () => {
       const dt = Math.min(this.clock.getDelta(), 0.1);
       const t = this.clock.elapsedTime;
       this.fps = this.fps * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05;
+      this.adapt(dt);
       this.onFrame?.(dt, t);
       this.postU.uTime.value = t;
       this.renderer.setRenderTarget(this.rt);

@@ -40,7 +40,8 @@ class Builder {
 
 const Z0 = -0.3, Z1 = 0.5; // 몸통 구간 (꼬리자루 ~ 주둥이)
 
-export function fishGeometry(b: BodyDef) {
+/** det: 세부 단계 (1 = 원본, 작을수록 같은 모양의 저폴리곤 · 멀리 있는 물고기용) */
+export function fishGeometry(b: BodyDef, det = 1) {
   const B = new Builder();
   const snout = b.snout ?? 0;
   const env = (t: number) => {
@@ -61,7 +62,7 @@ export function fishGeometry(b: BodyDef) {
   const zt = (t: number) => Z0 + (Z1 - Z0) * t;
 
   // 몸통 (타원 단면, 배는 약간 납작)
-  const NL = 20, NR = 14;
+  const NL = Math.max(6, Math.round(20 * det)), NR = Math.max(6, Math.round(14 * det));
   B.grid(NL, NR, (i, j) => {
     const t = i, a = j * Math.PI * 2;
     const s = Math.sin(a), c = Math.cos(a);

@@ -5,6 +5,8 @@ import type { DiveReadout } from '../dive/DiveComputer';
 import type { Input } from '../control/Input';
 import type { Collection } from '../life/Collection';
 import type { SpeciesDef } from '../life/types';
+import type { ChatMsg } from '../net/Multiplayer';
+import { chatRefusal, CHAT_MAX } from '../../server/chatFilter.js';
 import { CODEX, TIER_NAME, TIER_EN, TIER_STARS, tierOf, type Tier } from '../data/codex';
 
 export interface UIHandlers {
@@ -12,6 +14,10 @@ export interface UIHandlers {
   /** 체험 존에서 시점을 골라 시작 */
   select(mode: 'snorkel' | 'scuba', view: 'first' | 'third'): void;
   dismissZone(): void; returnToBoat(): void; toggleView(): void; toggleMap(): void;
+  /** 채팅 보내기 (보냈으면 true) */
+  sendChat(text: string): boolean;
+  /** 손 인사 */
+  wave(): void;
 }
 
 const html = String.raw;
@@ -61,11 +67,13 @@ export class UI {
         </div>
         <div id="snDepth"><span id="snD">0.0 m</span><div class="breath"><i id="snB"></i></div><small>숨</small></div>
         <div class="top-right">
-          <button class="icon-btn pe" data-act="map" tabindex="-1" title="지도 (M)">🗺 지도</button>
-          <button class="icon-btn pe codex-btn" data-act="codex" tabindex="-1">📖 <b class="cxn">0/0</b></button>
-          <button class="icon-btn pe" data-act="view" id="viewBtn" tabindex="-1">👁 1인칭으로</button>
-          <button class="icon-btn pe" data-act="settings">⚙ 설정</button>
-          <button class="icon-btn pe" data-act="return">⛵ 판툰으로 복귀</button>
+          <button class="icon-btn pe" data-act="map" tabindex="-1" title="지도 (M)" data-s="지도"><i>🗺</i><span class="lb">지도</span></button>
+          <button class="icon-btn pe codex-btn" data-act="codex" tabindex="-1" title="나의 컬렉션" data-s="도감"><i>📖</i><b class="cxn">0/0</b></button>
+          <button class="icon-btn pe" data-act="view" id="viewBtn" tabindex="-1" data-s="시점"><i>👁</i><span class="lb">1인칭으로</span></button>
+          <button class="icon-btn pe soc" data-act="chat" title="채팅 (Enter)" data-s="채팅"><i>💬</i><span class="lb">채팅</span><b class="badge"></b></button>
+          <button class="icon-btn pe soc" data-act="wave" title="손 인사 (H)" data-s="인사"><i>👋</i><span class="lb">손 인사</span></button>
+          <button class="icon-btn pe" data-act="settings" title="설정" data-s="설정"><i>⚙</i><span class="lb">설정</span></button>
+          <button class="icon-btn pe" data-act="return" title="판툰으로 복귀" data-s="복귀"><i>⛵</i><span class="lb">판툰으로 복귀</span></button>
         </div>
         <div class="keys" id="keys"></div>
         <div class="hint" id="hint"></div>
@@ -79,7 +87,7 @@ export class UI {
             <button class="vcard pe" data-act="zoneThird"><b>3인칭</b><span>내 캐릭터와 주변 바다를<br>함께 바라보며 유영해요.</span></button>
           </div>
           <button class="btn small later pe" data-act="zoneLater">조금 더 둘러볼게요</button>
-          <div class="disc">물속에서도 시점 버튼(V)으로 언제든 바꿀 수 있어요 · 가상 체험이며 실제 다이빙 교육을 대신하지 않아요</div>
+          <div class="disc">판툰 위에서는 3인칭으로 보이고, 물에 들어가면 고른 시점으로 바뀌어요 · 물속에서 시점 버튼(V)으로 언제든 바꿀 수 있어요 · 가상 체험이며 실제 다이빙 교육을 대신하지 않아요</div>
         </div>
         <div class="toast" id="toast"></div>
         <div id="discover"></div>
@@ -102,8 +110,14 @@ export class UI {
         </div>
       </div>
       <div id="codex"><div class="panel glass" id="codexPanel"></div></div>
+      <div id="chat" class="glass">
+        <header><b>💬 바다 채팅</b><small id="chatWho"></small><button class="x" data-act="closeChat" title="닫기 (Esc)">✕</button></header>
+        <div id="chatLog"><div class="empty">아직 대화가 없어요 · 먼저 인사해 보세요 👋</div></div>
+        <form id="chatForm" autocomplete="off"><input id="chatIn" maxlength="${CHAT_MAX}" placeholder="모두에게 보낼 말을 적어 주세요" enterkeyhint="send" autocomplete="off" autocorrect="off" spellcheck="false"><button type="submit">보내기</button></form>
+        <div class="rule" id="chatRule">지금 접속한 모두가 보는 채팅방이에요 · 욕설·비하·연락처·링크는 자동으로 막혀요</div>
+      </div>
       <div id="mp"><div class="chip"><i id="mpDot"></i><b id="mpCount">1</b>명 접속 · <span id="mpNick"></span></div><div id="mpFeed"></div></div>
-      <button class="icon-btn pe-always" id="mute" style="position:absolute;left:14px;bottom:14px;z-index:3">🔊</button>
+      <button class="icon-btn pe-always" id="mute" data-s="소리">🔊</button>
       <div id="fade"></div>
     `;
     root.querySelectorAll<HTMLElement>('[id]').forEach((e) => (this.el[e.id] = e));
@@ -121,6 +135,7 @@ export class UI {
     store.subscribe((s, p) => this.render(s, p));
     this.render(store.get(), store.get());
     this.setupTouch();
+    this.setupChat();
     this.el.keys.innerHTML = '';
   }
 
@@ -141,6 +156,9 @@ export class UI {
     else if (a === 'closeSettings') store.set({ settingsOpen: false });
     else if (a === 'codex') this.openCodex();
     else if (a === 'closeCodex') this.closeCodex();
+    else if (a === 'chat') this.toggleChat();
+    else if (a === 'closeChat') this.toggleChat(false);
+    else if (a === 'wave') this.h.wave();
     // 클릭한 버튼에 포커스가 남으면 Space/Enter(상승 키)가 그 버튼을 다시 눌러 버림 → 즉시 해제
     t.blur();
   }
@@ -151,7 +169,13 @@ export class UI {
     this.el.settings.classList.toggle('show', s.settingsOpen);
     this.el.mute.textContent = s.muted ? '🔇' : '🔊';
     // 버튼은 '누르면 바뀔 시점'을 보여줌: 지금 1인칭이면 3인칭으로, 3인칭이면 1인칭으로
-    this.el.viewBtn.textContent = s.view === 'first' ? '👁 3인칭으로' : '👁 1인칭으로';
+    (this.el.viewBtn.querySelector('.lb') as HTMLElement).textContent = s.view === 'first' ? '3인칭으로' : '1인칭으로';
+    this.el.viewBtn.dataset.s = s.view === 'first' ? '3인칭' : '1인칭';
+    // 수중·판툰 HUD에선 소리 버튼도 오른쪽 위 버튼 줄에 같이 (모바일에서 따로 떠서 겹치지 않게)
+    const tr = this.root.querySelector('#hud .top-right')!;
+    const hudOn = s.phase === 'swim' || s.phase === 'anchored';
+    if (hudOn && this.el.mute.parentElement !== tr) tr.appendChild(this.el.mute);
+    else if (!hudOn && this.el.mute.parentElement === tr) this.root.insertBefore(this.el.mute, this.el.fade);
     this.el.viewBtn.title = s.view === 'first' ? '지금은 1인칭 · 눌러서 3인칭으로 (V)' : '지금은 3인칭 · 눌러서 1인칭으로 (V)';
     this.root.querySelectorAll<HTMLElement>('[data-v]').forEach((e) => (e.textContent = Math.round(s.audio[e.dataset.v as keyof AppState['audio']] * 100) + ''));
     (this.root.querySelector('[data-sv]') as HTMLElement).textContent = s.lookSensitivity.toFixed(1);
@@ -199,7 +223,21 @@ export class UI {
     if (b) { b.style.display = text ? '' : 'none'; const l = b.querySelector('b'); if (l && l.textContent !== text) l.textContent = text; }
   }
 
-  setLoading(p: number) { (this.el.loading.querySelector('.bar i') as HTMLElement).style.width = `${Math.round(p * 100)}%`; }
+  /** 첫 로딩 화면(index.html의 #boot): 진행률 + 지금 하는 일 */
+  setLoading(p: number, step?: string) {
+    (this.el.loading.querySelector('.bar i') as HTMLElement).style.width = `${Math.round(p * 100)}%`;
+    const bar = document.getElementById('bootBar');
+    if (bar) { bar.classList.remove('wait'); (bar.firstElementChild as HTMLElement).style.width = `${Math.round(p * 100)}%`; }
+    const st = document.getElementById('bootStep');
+    if (st && step) st.textContent = step;
+  }
+  /** 로딩이 끝나면 첫 로딩 화면을 서서히 걷어냄 */
+  hideBoot() {
+    const b = document.getElementById('boot');
+    if (!b) return;
+    b.classList.add('done');
+    setTimeout(() => b.remove(), 1000);
+  }
   fade(on: boolean) { this.el.fade.classList.toggle('on', on); }
 
   hint(text: string, warn = false, hold = 4) {
@@ -286,7 +324,7 @@ export class UI {
     if (this.isTouch) return;
     const k = this.el.keys;
     k.innerHTML = mode === 'deck'
-      ? '<kbd>W A S D</kbd> 걷기 · 드래그 둘러보기 · <kbd>F</kbd> 선베드 눕기·일어나기 · <kbd>M</kbd> 지도 · <kbd>V</kbd> 시점'
+      ? '클릭한 곳으로 걷기 (<kbd>W A S D</kbd>도 가능) · 드래그 둘러보기 · 선베드 클릭 또는 <kbd>F</kbd> 눕기 · <kbd>M</kbd> 지도'
       : mode === 'scuba'
       ? '<kbd>W A S D</kbd> 이동 · <kbd>Space</kbd> 상승(수면에서 계속 누르면 물 밖으로) · <kbd>Shift</kbd> 하강 · <kbd>Q</kbd> 정지 · <kbd>M</kbd> 지도 · <kbd>V</kbd> 시점'
       : '<kbd>W A S D</kbd> 이동 · <kbd>Shift</kbd> 잠수(놓으면 그 깊이 유지) · <kbd>Space</kbd> 수면으로 / 고개 들기 · <kbd>M</kbd> 지도 · <kbd>V</kbd> 시점 · 드래그 시점';
@@ -295,26 +333,47 @@ export class UI {
   }
 
   // ───────── 터치 조작 ─────────
+  //  조이스틱은 제자리에 고정. 손가락을 테두리 밖(화면 어디든)으로 끌어도 그 방향으로 최고 속도 이동이 계속됨
+  //  · 터치는 Touch 이벤트로 손가락 ID를 끝까지 추적 (요소 밖으로 나가도 처음 누른 요소로 계속 전달되어 가장 확실함)
+  //  · 마우스·펜은 Pointer 이벤트 + window에서 추적
   private setupTouch() {
     const zone = this.el.joyZone, base = this.el.joyBase, knob = this.el.joyKnob;
-    let id: number | null = null;
-    const R = 52;
-    const move = (e: PointerEvent) => {
+    const R = 52;            // 노브가 움직이는 반지름 (px)
+    let touchId: number | null = null, ptrId: number | null = null;
+    const move = (x: number, y: number) => {
       const r = base.getBoundingClientRect();
-      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-      let dx = e.clientX - cx, dy = e.clientY - cy;
+      let dx = x - (r.left + r.width / 2), dy = y - (r.top + r.height / 2);
       const l = Math.hypot(dx, dy);
+      // 테두리 밖: 노브는 테두리에 붙어 있고, 방향은 손가락 쪽 · 세기는 최대
       if (l > R) { dx *= R / l; dy *= R / l; }
       knob.style.transform = `translate(${dx}px, ${dy}px)`;
-      // 입력 강도에 비례 (가장자리 데드존)
-      const m = Math.min(1, l / R);
+      const m = Math.min(1, l / (R * 0.85));
       const k = m < 0.12 ? 0 : (m - 0.12) / 0.88;
-      this.input.setTouchMove((dx / Math.max(l, 1)) * k, (-dy / Math.max(l, 1)) * k);
+      this.input.setTouchMove((dx / Math.max(Math.min(l, R), 1)) * k, (-dy / Math.max(Math.min(l, R), 1)) * k);
     };
-    zone.addEventListener('pointerdown', (e) => { if (id !== null) return; id = e.pointerId; zone.setPointerCapture(id); base.classList.add('active'); move(e); e.preventDefault(); });
-    zone.addEventListener('pointermove', (e) => { if (e.pointerId === id) move(e); });
-    const end = (e: PointerEvent) => { if (e.pointerId !== id) return; id = null; knob.style.transform = ''; base.classList.remove('active'); this.input.setTouchMove(0, 0); };
-    zone.addEventListener('pointerup', end); zone.addEventListener('pointercancel', end);
+    const release = () => { touchId = null; ptrId = null; knob.style.transform = ''; base.classList.remove('active'); this.input.setTouchMove(0, 0); };
+    const find = (list: TouchList) => { for (let i = 0; i < list.length; i++) if (list[i].identifier === touchId) return list[i]; return null; };
+    // 터치
+    zone.addEventListener('touchstart', (e) => {
+      if (touchId !== null) return;
+      const t = e.changedTouches[0];
+      touchId = t.identifier; base.classList.add('active'); move(t.clientX, t.clientY);
+      e.preventDefault();
+    }, { passive: false });
+    const tmove = (e: TouchEvent) => { if (touchId === null) return; const t = find(e.changedTouches); if (t) { move(t.clientX, t.clientY); e.preventDefault(); } };
+    const tend = (e: TouchEvent) => { if (touchId !== null && find(e.changedTouches)) release(); };
+    document.addEventListener('touchmove', tmove, { passive: false });
+    document.addEventListener('touchend', tend); document.addEventListener('touchcancel', tend);
+    // 마우스·펜 (터치는 위에서 처리하므로 제외)
+    zone.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch' || ptrId !== null || touchId !== null) return;
+      ptrId = e.pointerId; base.classList.add('active'); move(e.clientX, e.clientY); e.preventDefault();
+    });
+    addEventListener('pointermove', (e) => { if (e.pointerId === ptrId) move(e.clientX, e.clientY); });
+    const pend = (e: PointerEvent) => { if (e.pointerId === ptrId) release(); };
+    addEventListener('pointerup', pend); addEventListener('pointercancel', pend);
+    // 조이스틱이 숨겨질 때(판툰 복귀 등) 눌린 채로 남지 않게
+    store.subscribe((st, p) => { if (st.phase !== p.phase && (touchId !== null || ptrId !== null)) release(); });
   }
 
   private buildActions(mode: AppState['mode'] | 'deck') {
@@ -326,6 +385,9 @@ export class UI {
     } else if (mode === 'scuba') {
       act.innerHTML = `<button data-hold="up"><span class="ar">▲</span>상승</button><button data-hold="stop">정지</button><button data-hold="down"><span class="ar">▼</span>하강</button>`;
     } else act.innerHTML = '';
+    // 채팅·손 인사 (터치 화면에서는 오른쪽 아래 버튼 묶음 맨 위에)
+    act.insertAdjacentHTML('afterbegin', `<button data-act="chat" class="soc"><span class="ar">💬</span>채팅<b class="badge"></b></button><button data-act="wave" class="soc"><span class="ar">👋</span>인사</button>`);
+    this.renderBadge();
     act.querySelectorAll<HTMLButtonElement>('[data-tap="act"]').forEach((b) => {
       b.addEventListener('pointerdown', (e) => { this.input.queueInteract(); b.classList.add('held'); setTimeout(() => b.classList.remove('held'), 180); e.preventDefault(); });
     });
@@ -381,6 +443,78 @@ export class UI {
     this.el.mpDot.className = mode;
     this.el.mp.title = mode === 'ws' ? '멀티 서버에 연결됨' : mode === 'local' ? '서버 없음 · 같은 브라우저의 다른 탭과 연결' : '혼자 체험 중';
   }
+  // ───────── 채팅 ─────────
+  private unread = 0;
+  get chatOpen() { return this.el.chat.classList.contains('show'); }
+  private setupChat() {
+    const form = this.el.chatForm as HTMLFormElement, inp = this.el.chatIn as HTMLInputElement;
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!inp.value.trim()) return;
+      if (this.h.sendChat(inp.value)) inp.value = '';
+    });
+    inp.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Escape') { this.toggleChat(false); inp.blur(); }
+    });
+    inp.addEventListener('keyup', (e) => e.stopPropagation());
+    // 폰 키보드가 올라오면 보이는 영역 안에 채팅창을 맞춤
+    const vv = window.visualViewport;
+    const fit = () => {
+      const c = this.el.chat;
+      if (!vv || !this.isTouch) { c.style.removeProperty('--vvh'); c.style.removeProperty('--vvt'); return; }
+      c.style.setProperty('--vvh', `${Math.round(vv.height)}px`);
+      c.style.setProperty('--vvt', `${Math.round(vv.offsetTop)}px`);
+    };
+    vv?.addEventListener('resize', fit); vv?.addEventListener('scroll', fit);
+    fit();
+    this.el.chatLog.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
+  }
+  toggleChat(on = !this.chatOpen) {
+    this.el.chat.classList.toggle('show', on);
+    document.body.classList.toggle('chat-open', on);
+    if (on) {
+      this.unread = 0; this.renderBadge();
+      const log = this.el.chatLog; log.scrollTop = log.scrollHeight;
+      // 데스크톱은 바로 입력, 터치는 입력칸을 눌렀을 때 키보드가 올라오게 (화면이 갑자기 가려지지 않게)
+      if (!this.isTouch) setTimeout(() => (this.el.chatIn as HTMLInputElement).focus(), 30);
+    } else (this.el.chatIn as HTMLInputElement).blur();
+  }
+  private renderBadge() {
+    const txt = this.unread ? (this.unread > 9 ? '9+' : String(this.unread)) : '';
+    this.root.querySelectorAll<HTMLElement>('.badge').forEach((b) => { b.textContent = txt; b.classList.toggle('on', !!txt); });
+  }
+  addChat(c: ChatMsg, history: boolean) {
+    const log = this.el.chatLog;
+    log.querySelector('.empty')?.remove();
+    const near = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+    const row = document.createElement('div');
+    row.className = 'm' + (c.mine ? ' mine' : '');
+    const who = document.createElement('b'); who.textContent = c.mine ? `${c.nick} (나)` : c.nick;
+    if (!c.mine) who.style.color = `hsl(${Math.round(c.hue * 360)}, 75%, 72%)`;
+    const msg = document.createElement('span'); msg.textContent = c.x;   // 사용자 글은 항상 텍스트로만 (HTML로 해석하지 않음)
+    const tm = document.createElement('time'); const d = new Date(c.at); tm.textContent = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+    row.append(who, msg, tm);
+    log.appendChild(row);
+    while (log.children.length > 120) log.firstElementChild!.remove();
+    if (near || c.mine) log.scrollTop = log.scrollHeight;
+    if (!this.chatOpen && !c.mine && !history) {
+      this.unread++; this.renderBadge();
+      this.mpNotice(`💬 ${c.nick} · ${c.x}`);
+    }
+  }
+  chatRefused(why: string) {
+    const t = chatRefusal(why);
+    if (!t) return;
+    const r = this.el.chatRule;
+    r.textContent = t; r.classList.add('warn');
+    clearTimeout(this.ruleTimer);
+    this.ruleTimer = window.setTimeout(() => { r.textContent = '지금 접속한 모두가 보는 채팅방이에요 · 욕설·비하·연락처·링크는 자동으로 막혀요'; r.classList.remove('warn'); }, 4000);
+    if (!this.chatOpen) this.mpNotice(t);
+  }
+  private ruleTimer = 0;
+  setChatWho(count: number) { this.el.chatWho.textContent = `${count}명 접속 중`; }
+
   private feedTimer = 0;
   mpNotice(text: string) {
     const f = this.el.mpFeed;

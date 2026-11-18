@@ -14,6 +14,10 @@ interface Variant { kind: Kind; geo: THREE.BufferGeometry; tints: THREE.Color[];
 const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 
 // ───────── 생성기 ─────────
+/** 세부 단계 배율: 1 = 가까이서 보는 원본, 작을수록 같은 모양의 저폴리곤 (멀리 있는 산호용)
+ *  분할 수만 줄이고 난수 소비 순서는 그대로라, 같은 시드로 만들면 모양이 같음 */
+let DET = 1;
+const S = (n: number, min: number) => Math.max(min, Math.round(n * DET));
 function staghorn(r: RNG, base: THREE.Color, tip: THREE.Color, digitate = false): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
   const trunks = digitate ? 6 + Math.floor(r() * 4) : 5 + Math.floor(r() * 3);
@@ -21,13 +25,13 @@ function staghorn(r: RNG, base: THREE.Color, tip: THREE.Color, digitate = false)
   const grow = (a: THREE.Vector3, dir: THREE.Vector3, len: number, rad: number, depth: number) => {
     const b = a.clone().addScaledVector(dir, len);
     const tipEnd = depth >= maxDepth;
-    const g = segment(a, b, rad, tipEnd ? rad * 0.62 : rad * 0.8, 6, false);
+    const g = segment(a, b, rad, tipEnd ? rad * 0.62 : rad * 0.8, S(6, 4), false);
     paint(g, (p) => base.clone().lerp(tip, (1 - THREE.MathUtils.smoothstep(p.distanceTo(b), 0, len)) * (tipEnd ? 1 : 0.35)));
     parts.push(g);
     if (tipEnd) {
       // 둥근 가지 끝 (축 폴립)
       const c = b.clone().addScaledVector(dir, rad * 0.55);
-      const cap = segment(b, c, rad * 0.62, rad * 0.12, 6, true);
+      const cap = segment(b, c, rad * 0.62, rad * 0.12, S(6, 4), true);
       paint(cap, tip.clone().multiplyScalar(1.12));
       parts.push(cap);
       return;
@@ -49,7 +53,7 @@ function staghorn(r: RNG, base: THREE.Color, tip: THREE.Color, digitate = false)
 }
 
 function brain(r: RNG, groove: THREE.Color, ridge: THREE.Color, freq = 7, lumpy = 0.12, detail = 12): THREE.BufferGeometry {
-  let g: THREE.BufferGeometry = new THREE.IcosahedronGeometry(1, detail);
+  let g: THREE.BufferGeometry = new THREE.IcosahedronGeometry(1, S(detail, 2));
   g = mergeVerts(g);
   const pos = g.attributes.position as THREE.BufferAttribute;
   const p = V3();
@@ -116,7 +120,7 @@ function polarSheet(rad: number, a0: number, a1: number, rings: number, segs: nu
 function table(r: RNG, body: THREE.Color, rim: THREE.Color) {
   const R = 1, H = rand(r, 0.25, 0.4);
   const o = r() * 50;
-  const disc = polarSheet(R, 0, Math.PI * 2, 9, 56, (rr, a) => {
+  const disc = polarSheet(R, 0, Math.PI * 2, S(9, 3), S(56, 16), (rr, a) => {
     const edge = R * (0.82 + 0.18 * vnoise3(Math.cos(a) * 2 + o, Math.sin(a) * 2, 0));
     const rad = rr * edge / R;
     const y = H + 0.06 * (1 - (rr / R) ** 2) + vnoise3(Math.cos(a) * rad * 6, Math.sin(a) * rad * 6, o) * 0.015;
@@ -127,7 +131,7 @@ function table(r: RNG, body: THREE.Color, rim: THREE.Color) {
     const ridges = 0.85 + 0.15 * Math.sin(Math.atan2(p.z, p.x) * 90);
     return body.clone().multiplyScalar(ridges).lerp(rim, THREE.MathUtils.smoothstep(d, 0.65, 0.98));
   });
-  const stem = segment(V3(0, 0, 0), V3(0.03, H, 0), 0.14, 0.07, 8);
+  const stem = segment(V3(0, 0, 0), V3(0.03, H, 0), 0.14, 0.07, S(8, 5));
   paint(stem, body.clone().multiplyScalar(0.7));
   return merge([disc, stem]);
 }
@@ -138,7 +142,7 @@ function plate(r: RNG, body: THREE.Color, rim: THREE.Color) {
   for (let i = 0; i < n; i++) {
     const a0 = rand(r, 0, Math.PI * 2), span = rand(r, 1.1, 2.0);
     const R = rand(r, 0.35, 0.65), y0 = rand(r, 0.05, 0.35), curl = rand(r, 0.3, 0.8);
-    const g = polarSheet(R, a0, a0 + span, 6, 18, (rr, a) => {
+    const g = polarSheet(R, a0, a0 + span, S(6, 2), S(18, 6), (rr, a) => {
       const wav = Math.sin(a * 7 + i) * 0.03 * (rr / R);
       return [Math.cos(a) * rr, y0 + curl * rr * rr + wav, Math.sin(a) * rr];
     });
@@ -150,9 +154,9 @@ function plate(r: RNG, body: THREE.Color, rim: THREE.Color) {
 
 function sarcophyton(r: RNG, cap: THREE.Color) {
   const R = rand(r, 0.35, 0.5), H = rand(r, 0.18, 0.3), folds = 5 + Math.floor(r() * 5);
-  const top = polarSheet(R, 0, Math.PI * 2, 8, 64, (rr, a) => [Math.cos(a) * rr, H + Math.sin(a * folds) * 0.09 * (rr / R) ** 2, Math.sin(a) * rr]);
+  const top = polarSheet(R, 0, Math.PI * 2, S(8, 3), S(64, 18), (rr, a) => [Math.cos(a) * rr, H + Math.sin(a * folds) * 0.09 * (rr / R) ** 2, Math.sin(a) * rr]);
   paint(top, (p) => cap.clone().multiplyScalar(0.85 + 0.15 * Math.sin(p.x * 80) * Math.sin(p.z * 80)), (p) => p.y * 0.6);
-  const stalk = segment(V3(), V3(0, H, 0), R * 0.55, R * 0.4, 12);
+  const stalk = segment(V3(), V3(0, H, 0), R * 0.55, R * 0.4, S(12, 6));
   paint(stalk, cap.clone().lerp(hex('#e8e0c8'), 0.5), (p) => p.y * 0.4);
   return merge([top, stalk]);
 }
@@ -193,7 +197,7 @@ function sinularia(r: RNG, c: THREE.Color) {
     const a = rand(r, 0, Math.PI * 2), d = rand(r, 0, 0.25);
     const base = V3(Math.cos(a) * d, 0, Math.sin(a) * d);
     const top = base.clone().add(V3(rand(r, -0.08, 0.08), rand(r, 0.2, 0.42), rand(r, -0.08, 0.08)));
-    const s = segment(base, top, rand(r, 0.05, 0.08), 0.035, 7, true);
+    const s = segment(base, top, rand(r, 0.05, 0.08), 0.035, S(7, 4), true);
     paint(s, c.clone().multiplyScalar(rand(r, 0.85, 1.1)), (p) => Math.max(0, p.y) * 1.2);
     parts.push(s);
   }
@@ -224,9 +228,9 @@ function tubes(r: RNG) {
     const h = rand(r, 0.3, 0.9), rad = rand(r, 0.05, 0.09);
     const base = V3(Math.cos(a) * d, 0, Math.sin(a) * d);
     const top = base.clone().add(V3(rand(r, -0.1, 0.1), h, rand(r, -0.1, 0.1)));
-    const outer = segment(base, top, rad * 0.8, rad, 14);
+    const outer = segment(base, top, rad * 0.8, rad, S(14, 6));
     paint(outer, (p) => new THREE.Color(1, 1, 1).multiplyScalar(0.8 + 0.2 * Math.sin(p.y * 60)), (p) => Math.max(0, p.y) * 0.15);
-    const inner = segment(base.clone().add(V3(0, h * 0.3, 0)), top, rad * 0.62, rad * 0.86, 14);
+    const inner = segment(base.clone().add(V3(0, h * 0.3, 0)), top, rad * 0.62, rad * 0.86, S(14, 6));
     inner.scale(1, 1, 1);
     paint(inner, new THREE.Color(0.25, 0.22, 0.25), (p) => Math.max(0, p.y) * 0.15);
     parts.push(outer, inner);
@@ -236,7 +240,7 @@ function tubes(r: RNG) {
 
 function lathe(r: RNG, profile: [number, number][], ribs: number, c: THREE.Color) {
   const pts = profile.map(([x, y]) => new THREE.Vector2(x, y));
-  const g = new THREE.LatheGeometry(pts, 28);
+  const g = new THREE.LatheGeometry(pts, S(28, 10));
   const pos = g.attributes.position as THREE.BufferAttribute;
   const p = V3();
   for (let i = 0; i < pos.count; i++) {
@@ -258,13 +262,13 @@ function whip(r: RNG) {
     const t = i / 24;
     pts.push(V3(Math.sin(t * tw) * 0.12 * t, t * h, Math.cos(t * tw) * 0.12 * t - 0.12 * t));
   }
-  const g = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.012, 5, false);
+  const g = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), S(24, 8), 0.012, S(5, 3), false);
   paint(g, hex('#ffffff'), (p) => (p.y / h) ** 1.5 * 1.2);
   return g;
 }
 
 function rock(r: RNG, size: number) {
-  let g: THREE.BufferGeometry = mergeVerts(new THREE.IcosahedronGeometry(1, 6));
+  let g: THREE.BufferGeometry = mergeVerts(new THREE.IcosahedronGeometry(1, S(6, 2)));
   const pos = g.attributes.position as THREE.BufferAttribute;
   const p = V3(), o = r() * 100;
   for (let i = 0; i < pos.count; i++) {
@@ -308,7 +312,8 @@ const PAL = {
   white: C('#ffffff', '#f2f2f2', '#e6e6e6'),
 };
 
-function buildVariants(r: RNG): Variant[] {
+function buildVariants(r: RNG, det = 1): Variant[] {
+  DET = det;
   const v: Variant[] = [];
   const add = (kind: Kind, geo: THREE.BufferGeometry, tints: THREE.Color[], scale: [number, number]) => v.push({ kind, geo, tints, scale });
   for (let i = 0; i < 5; i++) add('staghorn', staghorn(r, pick(r, PAL.acroBase), pick(r, PAL.acroTip)), PAL.white, [1.2, 2.2]);
@@ -327,6 +332,7 @@ function buildVariants(r: RNG): Variant[] {
   for (let i = 0; i < 2; i++) add('whip', whip(r), PAL.whip, [0.8, 1.2]);
   for (let i = 0; i < 4; i++) add('rock', rock(r, 1), PAL.white, [0.4, 1.4]);
   for (const it of v) bakeSurface(it.geo, it.kind);
+  DET = 1;
   return v;
 }
 
@@ -363,6 +369,11 @@ float ch3(vec3 p){ return fract(sin(dot(mod(p, 289.0), vec3(127.1, 311.7, 74.7))
 float cn3(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(mix(ch3(i), ch3(i + vec3(1,0,0)), f.x), mix(ch3(i + vec3(0,1,0)), ch3(i + vec3(1,1,0)), f.x), f.y),
              mix(mix(ch3(i + vec3(0,0,1)), ch3(i + vec3(1,0,1)), f.x), mix(ch3(i + vec3(0,1,1)), ch3(i + vec3(1,1,1)), f.x), f.y), f.z); }
+// 무늬 종류별 주파수 (coralH의 두 번째 값과 같음) — 노이즈를 계산하기 전에 보일지 판단
+float coralFreq(float k) {
+  if (k < 0.5) return 0.0; if (k < 1.5) return 30.0; if (k < 2.5) return 52.0; if (k < 3.5) return 35.0;
+  if (k < 4.5) return 70.0; if (k < 5.5) return 60.0; if (k < 6.5) return 26.0; return 21.0;
+}
 // 산호 표면 미세 높이 (0~1) + 주파수(앨리어싱 페이드용) + 범프 세기
 vec3 coralH(vec3 p, float k) {
   if (k < 0.5) return vec3(0.0);
@@ -393,16 +404,27 @@ function chooseKind(r: RNG, w: Partial<Record<Kind, number>>): Kind {
 
 export interface CoralInfo { x: number; y: number; z: number; kind: Kind; size: number }
 
+interface ReefGroup { items: { m: THREE.Matrix4; c: THREE.Color }[]; pos: Float32Array; full: THREE.InstancedMesh; lod: THREE.InstancedMesh }
+
 export class CoralReef {
   group = new THREE.Group();
-  cells: { center: THREE.Vector3; meshes: THREE.InstancedMesh[] }[] = [];
+  private groups: ReefGroup[] = [];
+  /** 이 거리(m) 안의 산호만 원본 폴리곤, 그 밖은 같은 모양의 저폴리곤 */
+  private near: number;
+  private lastSplit = new THREE.Vector3(1e9, 0, 0);
   /** 생물들이 참고하는 산호 위치 (앵무고기 섭식, 군집 회유 등) */
   points: CoralInfo[] = [];
   material: THREE.MeshStandardMaterial;
 
-  constructor(scene: THREE.Scene, density: number) {
+  /** 이 거리(m) 밖 산호는 그리지 않음 (물속 시야 끝 · 직전 4m 동안 서서히 작아지며 사라짐) */
+  private far: number;
+  private tmpM = new THREE.Matrix4();
+  constructor(scene: THREE.Scene, density: number, near = 18, far = Infinity) {
+    this.near = near; this.far = far;
     const r = mulberry32(2024);
     const variants = buildVariants(r);
+    // 같은 시드 → 같은 모양, 분할 수만 약 1/3 (먼 산호용)
+    const lodVariants = buildVariants(mulberry32(2024), 0.34);
     this.material = patchWater(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.74, metalness: 0, side: THREE.DoubleSide }), {
       key: 'coral',
       extend: (sh) => {
@@ -416,9 +438,11 @@ export class CoralReef {
               float dith = fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453);
               if (camD < 0.3 + dith * 0.35) discard;
             }
-            vec3 cHd = coralH(vLoc, vPat);
-            float cPx = length(fwidth(vLoc)) * cHd.y;
+            // 표면 요철이 화소보다 잘아서 어차피 안 보이는 곳(멀리 있는 산호)은 노이즈 계산 자체를 건너뜀 → 결과 화면은 동일
+            float cFq = coralFreq(vPat);
+            float cPx = length(fwidth(vLoc)) * cFq;
             float cFade = 1.0 - smoothstep(0.25, 0.9, cPx);
+            vec3 cHd = cFade > 0.0 ? coralH(vLoc, vPat) : vec3(0.5, cFq, 0.0);
             float cH = mix(0.5, cHd.x, cFade);
             diffuseColor.rgb *= 0.86 + 0.24 * cH;
             if (vPat > 3.5 && vPat < 4.5) diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.35 + 0.04, smoothstep(0.7, 0.9, cH) * cFade);`)
@@ -522,39 +546,94 @@ export class CoralReef {
     stex.magFilter = THREE.LinearFilter; stex.minFilter = THREE.LinearFilter; stex.needsUpdate = true;
     reefShadow.uReefShadow.value = stex;
 
-    for (const [key, list] of buckets) {
-      const [cx, cz] = key.split(',').map(Number);
-      const meshes: THREE.InstancedMesh[] = [];
-      const byV = new Map<number, typeof list>();
-      for (const it of list) { if (!byV.has(it.v)) byV.set(it.v, []); byV.get(it.v)!.push(it); }
-      for (const [vi, items] of byV) {
-        const im = new THREE.InstancedMesh(variants[vi].geo, this.material, items.length);
+    // 산호 종류(변형)마다 바다 전체를 한 묶음으로 → 그리기 호출 수가 종류 수 × 2 정도로 줄어듦
+    //  (예전: 36m 구역 × 종류마다 따로 → 폰에서 300회 이상)
+    const byV = new Map<number, { m: THREE.Matrix4; c: THREE.Color }[]>();
+    for (const [, list] of buckets) for (const it of list) { if (!byV.has(it.v)) byV.set(it.v, []); byV.get(it.v)!.push(it); }
+    for (const [vi, items] of byV) {
+      const mk = (geo: THREE.BufferGeometry) => {
+        const im = new THREE.InstancedMesh(geo, this.material, items.length);
         im.userData.kind = variants[vi].kind;
         items.forEach((it, i) => { im.setMatrixAt(i, it.m); im.setColorAt(i, it.c); });
-        im.instanceMatrix.needsUpdate = true;
-        im.computeBoundingSphere();
-        meshes.push(im);
+        im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        im.instanceColor!.setUsage(THREE.DynamicDrawUsage);
+        im.frustumCulled = false;   // 시야 판정은 산호 하나하나 직접 (아래 refill)
+        im.count = 0; im.visible = false;
         this.group.add(im);
-      }
-      this.cells.push({ center: V3((cx + 0.5) * CELL, -8, (cz + 0.5) * CELL), meshes });
+        return im;
+      };
+      const full = mk(variants[vi].geo), lod = mk(lodVariants[vi].geo);
+      const pos = new Float32Array(items.length * 4);   // x, y, z, 반지름
+      const pv = new THREE.Vector3(), ps = new THREE.Vector3(), q = new THREE.Quaternion();
+      items.forEach((it, i) => {
+        it.m.decompose(pv, q, ps);
+        pos[i * 4] = pv.x; pos[i * 4 + 1] = pv.y; pos[i * 4 + 2] = pv.z;
+        pos[i * 4 + 3] = Math.max(ps.x, ps.y, ps.z) * 1.1 + 0.2;
+      });
+      this.groups.push({ items, pos, full, lod });
     }
     scene.add(this.group);
     void dropFactor;
   }
 
-  /** 안개 너머 셀은 아예 그리지 않음 */
-  update(camera: THREE.Camera, maxDist: number) {
+  /**
+   * 매 프레임: 카메라가 1m 이상 움직였거나 7° 이상 돌았을 때만 다시 고름
+   *  ① 화면 밖(뒤·옆) 산호는 그리지 않음 — 여유각을 둬서 고개를 돌려도 빈 곳이 보이지 않게
+   *  ② near m 안은 원본, far m 안은 같은 모양의 저폴리곤(끝 4m는 서서히 작게), 그 밖은 안 그림
+   */
+  update(camera: THREE.PerspectiveCamera, maxDist: number) {
     const cp = camera.position;
-    for (const c of this.cells) {
-      const d = Math.hypot(c.center.x - cp.x, c.center.z - cp.z);
-      const vis = d < maxDist + 26;
-      for (const m of c.meshes) m.visible = vis;
+    camera.getWorldDirection(this.fwd);
+    const moved = cp.distanceToSquared(this.lastSplit) > 1.0;
+    const turned = this.fwd.dot(this.lastDir) < Math.cos(THREE.MathUtils.degToRad(7));
+    const fovChanged = camera.fov !== this.lastFov || camera.aspect !== this.lastAspect;
+    if (!moved && !turned && !fovChanged) return;
+    this.lastSplit.copy(cp); this.lastDir.copy(this.fwd); this.lastFov = camera.fov; this.lastAspect = camera.aspect;
+    // 화면 대각선 반각 + 여유 20° (다음 갱신 전까지 돌 수 있는 각도보다 넉넉히)
+    const tv = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), th = tv * camera.aspect;
+    const half = Math.min(Math.PI * 0.95, Math.atan(Math.hypot(tv, th)) + THREE.MathUtils.degToRad(20));
+    const cosHalf = Math.cos(half), sinHalf = Math.sin(half);
+    const far = Math.min(this.far, maxDist + 3);
+    for (const g of this.groups) this.refill(g, cp, this.fwd, cosHalf, sinHalf, this.near, far);
+  }
+  private fwd = new THREE.Vector3(); private lastDir = new THREE.Vector3(0, 0, 0); private lastFov = 0; private lastAspect = 0;
+
+  private refill(g: ReefGroup, cp: THREE.Vector3, f: THREE.Vector3, cosHalf: number, sinHalf: number, near: number, far: number) {
+    let nf = 0, nl = 0;
+    const near2 = near * near, far2 = far * far, M = this.tmpM, P = g.pos;
+    for (let i = 0; i < g.items.length; i++) {
+      const ex = P[i * 4] - cp.x, ey = P[i * 4 + 1] - cp.y, ez = P[i * 4 + 2] - cp.z, rad = P[i * 4 + 3];
+      const d2h = ex * ex + ez * ez;
+      if (d2h >= far2) continue;
+      // 시야 원뿔 판정 (산호 크기만큼 여유): 각도 > half 이고 원뿔 밖으로 반지름 이상 떨어져 있으면 제외
+      const d = Math.sqrt(d2h + ey * ey);
+      if (d > rad) {
+        const along = ex * f.x + ey * f.y + ez * f.z;
+        if (along < d * cosHalf) {
+          const perp = Math.sqrt(Math.max(0, d * d - along * along));
+          if (perp * cosHalf - along * sinHalf > rad) continue;
+        }
+      }
+      const it = g.items[i];
+      if (d2h < near2) { g.full.setMatrixAt(nf, it.m); g.full.setColorAt(nf, it.c); nf++; continue; }
+      const k = Math.min(1, (far - Math.sqrt(d2h)) / 4);
+      if (k < 1) { M.copy(it.m); const e = M.elements; for (let j = 0; j < 11; j++) if (j % 4 !== 3) e[j] *= k; g.lod.setMatrixAt(nl, M); }
+      else g.lod.setMatrixAt(nl, it.m);
+      g.lod.setColorAt(nl, it.c); nl++;
+    }
+    for (const [im, n] of [[g.full, nf], [g.lod, nl]] as const) {
+      im.count = n; im.visible = n > 0;   // 빈 묶음은 그리기 호출도 하지 않음
+      if (!n) continue;
+      // 실제로 쓰는 앞부분만 GPU로 올림
+      im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.addUpdateRange(0, n * 16); im.instanceMatrix.needsUpdate = true;
+      const ic = im.instanceColor!; ic.clearUpdateRanges(); ic.addUpdateRange(0, n * 3); ic.needsUpdate = true;
     }
   }
 
   stats() {
-    let inst = 0, verts = 0;
-    for (const c of this.cells) for (const m of c.meshes) { inst += m.count; verts += m.count * m.geometry.attributes.position.count; }
-    return { inst, verts, draws: this.cells.reduce((a, c) => a + c.meshes.length, 0) };
+    // 지금 실제로 그리는 것 기준 (원본 + 저폴리곤)
+    let inst = 0, verts = 0, draws = 0;
+    for (const g of this.groups) for (const m of [g.full, g.lod]) if (m.visible) { inst += m.count; verts += m.count * m.geometry.attributes.position.count; draws++; }
+    return { inst, verts, draws };
   }
 }

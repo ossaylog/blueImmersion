@@ -8,16 +8,19 @@ export interface InputState {
   equalize: boolean;                // 이번 프레임에 눌림
   stop: boolean;                    // 호버링(정지) 요청
   interact: boolean;                // 이번 프레임에 눌림: 판툰에서 선베드 눕기·일어나기 (F)
+  tap: { x: number; y: number } | null; // 이번 프레임의 짧은 탭/클릭 (화면 좌표) — 판툰 위에서 그 지점으로 걷기
 }
 
 export class Input {
-  state: InputState = { move: { x: 0, y: 0 }, up: false, down: false, look: { x: 0, y: 0 }, zoom: 0, equalize: false, stop: false, interact: false };
+  state: InputState = { move: { x: 0, y: 0 }, up: false, down: false, look: { x: 0, y: 0 }, zoom: 0, equalize: false, stop: false, interact: false, tap: null };
   private keys = new Set<string>();
   private touchMove = { x: 0, y: 0 };
   private touchUp = false; private touchDown = false; private touchStop = false;
   private eqQueued = false;
   private actQueued = false;
   private dragId: number | null = null;
+  private down = { x: 0, y: 0, t: 0, moved: 0 };
+  private tapQueued: { x: number; y: number } | null = null;
   private last = { x: 0, y: 0 };
   enabled = true;
 
@@ -35,14 +38,21 @@ export class Input {
     surface.addEventListener('pointerdown', (e) => {
       if (this.dragId !== null) return;
       this.dragId = e.pointerId; this.last = { x: e.clientX, y: e.clientY };
+      this.down = { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0 };
       surface.setPointerCapture(e.pointerId);
     });
     surface.addEventListener('pointermove', (e) => {
       if (e.pointerId !== this.dragId) return;
       this.state.look.x += e.clientX - this.last.x; this.state.look.y += e.clientY - this.last.y;
       this.last = { x: e.clientX, y: e.clientY };
+      this.down.moved = Math.max(this.down.moved, Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y));
     });
-    const end = (e: PointerEvent) => { if (e.pointerId === this.dragId) this.dragId = null; };
+    const end = (e: PointerEvent) => {
+      if (e.pointerId !== this.dragId) return;
+      this.dragId = null;
+      // 거의 움직이지 않은 짧은 누름 = 탭 (드래그로 둘러보기와 구분)
+      if (e.type === 'pointerup' && (e.button === 0 || e.pointerType !== 'mouse') && this.down.moved < 12 && performance.now() - this.down.t < 450) this.tapQueued = { x: e.clientX, y: e.clientY };
+    };
     surface.addEventListener('pointerup', end); surface.addEventListener('pointercancel', end);
     surface.addEventListener('wheel', (e) => { this.state.zoom += Math.sign(e.deltaY) * 0.6; e.preventDefault(); }, { passive: false });
     // 브라우저 기본 제스처(스크롤/확대) 차단
@@ -71,6 +81,7 @@ export class Input {
     s.stop = this.enabled && (k.has('KeyQ') || this.touchStop);
     s.equalize = this.eqQueued; this.eqQueued = false;
     s.interact = this.enabled && this.actQueued; this.actQueued = false;
+    s.tap = this.enabled ? this.tapQueued : null; this.tapQueued = null;
   }
   /** 프레임 끝: 누적량 초기화 */
   consume() { this.state.look.x = 0; this.state.look.y = 0; this.state.zoom = 0; }

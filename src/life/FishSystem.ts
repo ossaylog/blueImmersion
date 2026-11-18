@@ -9,6 +9,11 @@ import { heightAt } from '../world/terrain';
 import type { CoralReef, CoralInfo } from '../world/CoralReef';
 import { rand, clamp, mulberry32, type RNG } from '../core/math';
 import { seeded, h01, type Plan } from './Ecology';
+import { markSilhouette } from '../water/WaterShading';
+import { isGrand } from '../data/codex';
+
+/** 이 거리(m) 안 물고기만 원본 폴리곤 (큰 물고기는 몸길이만큼 더 멀리까지) */
+const FISH_NEAR = 10;
 
 const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler(0, 0, 0, 'YXZ'), tmpM = new THREE.Matrix4(), tmpS = new THREE.Vector3();
 const _p = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -77,20 +82,28 @@ export class FishGroup implements Creature {
   leave() { if (this.sp.behavior !== 'anemone') this.leaving = true; }
 }
 
+/** 한 종의 물고기를 그리는 묶음: 가까이(원본) · 멀리(같은 모양 저폴리곤) 두 단계 */
+interface FishLod { mesh: THREE.InstancedMesh; phase: THREE.InstancedBufferAttribute; swim: THREE.InstancedBufferAttribute; n: number }
 class SpeciesRenderer {
-  mesh: THREE.InstancedMesh; phase: THREE.InstancedBufferAttribute; swim: THREE.InstancedBufferAttribute;
+  lods: [FishLod, FishLod];
   constructor(scene: THREE.Scene, sp: SpeciesDef, public capacity: number) {
-    const geo = fishGeometry(sp.body!);
-    this.phase = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1);
-    this.swim = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1);
-    this.phase.setUsage(THREE.DynamicDrawUsage); this.swim.setUsage(THREE.DynamicDrawUsage);
-    geo.setAttribute('aPhase', this.phase); geo.setAttribute('aSwim', this.swim);
     const mat = fishMaterial(sp.colors, sp.pattern ?? 0, sp.body!, sp.swim?.amp ?? 0.07);
-    this.mesh = new THREE.InstancedMesh(geo, mat, capacity);
-    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.mesh.frustumCulled = false;
-    this.mesh.count = 0;
-    scene.add(this.mesh);
+    // 상어·고래상어·혹등고래 등 큰·희귀 종: 멀리서 그림자로 다가옴
+    if (isGrand(sp)) markSilhouette(mat);
+    const mk = (det: number): FishLod => {
+      const geo = fishGeometry(sp.body!, det);
+      const phase = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1);
+      const swim = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1);
+      phase.setUsage(THREE.DynamicDrawUsage); swim.setUsage(THREE.DynamicDrawUsage);
+      geo.setAttribute('aPhase', phase); geo.setAttribute('aSwim', swim);
+      const mesh = new THREE.InstancedMesh(geo, mat, capacity);
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      mesh.frustumCulled = false;   // 시야 판정은 물고기 한 마리씩 직접 (writeInstances)
+      mesh.count = 0; mesh.visible = false;
+      scene.add(mesh);
+      return { mesh, phase, swim, n: 0 };
+    };
+    this.lods = [mk(1), mk(0.4)];
   }
 }
 
@@ -535,13 +548,32 @@ export class FishSystem {
     }
   }
 
+  /** 카메라 시야 (매 프레임 App이 넘겨줌) — 화면 밖 물고기는 그리지 않고, 먼 물고기는 저폴리곤으로 */
+  private vFwd = new THREE.Vector3(0, 0, -1); private vCos = -1; private vSin = 0; private hidden = false;
+  view(camera: THREE.PerspectiveCamera) {
+    camera.getWorldDirection(this.vFwd);
+    const tv = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), th = tv * camera.aspect;
+    const half = Math.min(Math.PI * 0.95, Math.atan(Math.hypot(tv, th)) + THREE.MathUtils.degToRad(8));
+    this.vCos = Math.cos(half); this.vSin = Math.sin(half);
+  }
   private writeInstances() {
-    for (const [, r] of this.renderers) r.mesh.count = 0;
+    for (const [, r] of this.renderers) { r.lods[0].n = 0; r.lods[1].n = 0; }
+    const cp = this.camPos, f = this.vFwd, cosH = this.vCos, sinH = this.vSin;
+    const NEAR2 = FISH_NEAR * FISH_NEAR;
     for (const g of this.groups) {
       const r = this.renderers.get(g.sp.id)!;
+      const rad0 = g.sp.length * 0.7 + 0.3;
       for (const a of g.agents) {
-        const i = r.mesh.count;
-        if (i >= r.capacity) break;
+        // 시야 원뿔 밖(몸 크기만큼 여유)이면 건너뜀
+        const ex = a.pos.x - cp.x, ey = a.pos.y - cp.y, ez = a.pos.z - cp.z;
+        const d2 = ex * ex + ey * ey + ez * ez, rad = rad0 * a.scale;
+        if (d2 > rad * rad) {
+          const d = Math.sqrt(d2), along = ex * f.x + ey * f.y + ez * f.z;
+          if (along < d * cosH && Math.sqrt(Math.max(0, d2 - along * along)) * cosH - along * sinH > rad) continue;
+        }
+        const L = r.lods[d2 < NEAR2 * Math.max(1, g.sp.length) ? 0 : 1];
+        const i = L.n;
+        if (i >= r.capacity) continue;
         tmpE.set(-Math.asin(clamp(a.dir.y, -0.9, 0.9)), a.yaw, a.roll);
         tmpQ.setFromEuler(tmpE);
         tmpS.setScalar(a.scale);
@@ -549,15 +581,19 @@ export class FishSystem {
         _p.copy(a.pos);
         if (a.bite > 0 && a.feedP) _p.addScaledVector(a.feedOut, -a.bite);
         tmpM.compose(_p, tmpQ, tmpS);
-        r.mesh.setMatrixAt(i, tmpM);
-        r.phase.setX(i, a.phase); r.swim.setX(i, a.swim);
-        r.mesh.count = i + 1;
+        L.mesh.setMatrixAt(i, tmpM);
+        L.phase.setX(i, a.phase); L.swim.setX(i, a.swim);
+        L.n = i + 1;
       }
     }
-    for (const [, r] of this.renderers) {
-      r.mesh.instanceMatrix.needsUpdate = true; r.phase.needsUpdate = true; r.swim.needsUpdate = true;
+    for (const [, r] of this.renderers) for (const L of r.lods) {
+      L.mesh.count = L.n; L.mesh.visible = L.n > 0 && !this.hidden;   // 빈 묶음은 그리기 호출 없음
+      if (!L.n) continue;
+      L.mesh.instanceMatrix.clearUpdateRanges(); L.mesh.instanceMatrix.addUpdateRange(0, L.n * 16); L.mesh.instanceMatrix.needsUpdate = true;
+      L.phase.clearUpdateRanges(); L.phase.addUpdateRange(0, L.n); L.phase.needsUpdate = true;
+      L.swim.clearUpdateRanges(); L.swim.addUpdateRange(0, L.n); L.swim.needsUpdate = true;
     }
   }
 
-  setVisible(v: boolean) { for (const [, r] of this.renderers) r.mesh.visible = v; }
+  setVisible(v: boolean) { this.hidden = !v; for (const [, r] of this.renderers) for (const L of r.lods) L.mesh.visible = v && L.n > 0; }
 }

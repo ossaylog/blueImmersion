@@ -12,6 +12,11 @@ npm run build      # dist/index.html 단일 파일 (서버 없이 열기 가능)
 ### 멀티유저 (함께 다이빙)
 - `npm run dev` / `npm run preview` 서버에 멀티유저 릴레이(웹소켓 `/mp`)가 자동으로 붙어요. 같은 주소로 접속한 사람끼리 같은 바다에서 서로 보여요.
 - 배포·상시 운영: `npm run server` → 빌드 후 `http://<서버주소>:8787` (포트는 `PORT` 환경변수)
+- 정식 배포(blue-immersion.o-r.kr): `./scripts/deploy.sh` → 빌드 후 `~/blue-immersion-server`로 복사하고 서버 재시작
+  - 서버는 launchd 서비스(`~/Library/LaunchAgents/kr.blue-immersion.server.plist`, 포트 5173 = Caddy 연결 대상)로 Mac이 켜질 때 자동 실행되고, 꺼지면 다시 떠요 · 로그 `~/Library/Logs/blue-immersion.log`
+  - macOS는 백그라운드 서비스의 바탕화면(Desktop) 폴더 접근을 막기 때문에 실행본을 홈 폴더 별도 위치에 둬요
+- 채팅: 💬 버튼(Enter)으로 접속자 전체 공개 채팅방 · 욕설·비하·연락처·링크는 서버가 막고(`server/chatFilter.js`), 3번 어기면 1분간 정지 · 도배 방지
+- 손 인사: 👋 버튼(H) · 다른 사람 화면에서도 내 캐릭터가 손을 흔들고, 1인칭이면 내 시야에 손이 올라와요
 - 접속할 때마다 한글로만 된 랜덤 닉네임(예: `느긋한 해마`, 겹치면 `달빛 느긋한 해마`)이 정해지고, 각 캐릭터 머리 위에 닉네임이 표시돼요. 우상단에 접속 인원이 보여요.
 - 서버 없이 `dist/index.html`을 직접 열면, 같은 브라우저의 다른 탭끼리만 연결돼요.
 - 다른 릴레이 서버 지정: `?mp=wss://example.com/mp`

@@ -114,6 +114,8 @@ export class CameraRig {
     cam.lookAt(this.look);
   }
 
+  /** 자동 이동(탭해서 걷기) 중: 시선을 진행 방향 쪽으로 천천히 돌림 */
+  steer(yaw: number, rate: number, dt: number) { this.yawT = dampAngle(this.yawT, yaw, rate, dt); }
   /** 이동 기준 방향 (카메라 수평 yaw) */
   get heading() { return this.yaw; }
 }

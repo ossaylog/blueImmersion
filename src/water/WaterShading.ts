@@ -103,6 +103,22 @@ vec3 applyWaterView(vec3 col, vec3 wp) {
   }
   return col;
 }
+
+// 큰·희귀 생물: 멀리서는 색 대신 '물빛보다 어두운 그림자 덩어리'로 보이다가, 가까워질수록 본래 색이 드러남
+//  실제 바닷속에서 커다란 생물이 푸른 물 너머에서 먼저 실루엣으로 나타나는 모습
+vec3 applyWaterSilhouette(vec3 col, vec3 wp) {
+  float path = underwaterPath(wp);
+  if (uUnderwater < 0.5 || path <= 0.0) return applyWaterView(col, wp);
+  float dist = length(wp - cameraPosition);
+  float d = max(0.0, mix(-wp.y, -cameraPosition.y, 0.5));
+  vec3 dir = normalize(wp - cameraPosition + vec3(0.0, 1e-4, 0.0));
+  vec3 fogc = inscatter(dir, max(-cameraPosition.y, 0.0) * 0.6 + d * 0.4);
+  vec3 nearC = mix(fogc, col, exp(-uExtinct * path));
+  // 그림자는 물에 덜 묻혀 더 멀리서도 보임 · 등장 거리(약 70m) 직전에는 서서히 나타남
+  float keep = exp(-0.047 * path * 0.5) * (1.0 - smoothstep(56.0, 70.0, dist));
+  vec3 shadowC = mix(fogc, fogc * vec3(0.34, 0.4, 0.46), keep);
+  return mix(nearC, shadowC, smoothstep(10.0, 26.0, dist));
+}
 `;
 
 /** 산호가 해저에 드리우는 접촉 그림자 (CoralReef가 생성, Seabed가 사용) */
@@ -153,9 +169,29 @@ export function patchWater<T extends THREE.Material>(mat: T, opts: WaterPatchOpt
             // 물에 산란된 주변광 (그늘도 완전히 검지 않게)
             col += diffuseColor.rgb * waterColor(fd) * 0.08;
           }
-          gl_FragColor.rgb = applyWaterView(col, vWPos);
+          #ifdef WATER_SILHOUETTE
+            gl_FragColor.rgb = applyWaterSilhouette(col, vWPos);
+          #else
+            gl_FragColor.rgb = applyWaterView(col, vWPos);
+          #endif
         }`);
   };
-  mat.customProgramCacheKey = () => 'water_' + (opts.key ?? '') + (caustics ? 'c' : '');
+  mat.customProgramCacheKey = () => 'water_' + (opts.key ?? '') + (caustics ? 'c' : '') + (mat.defines?.WATER_SILHOUETTE !== undefined ? 's' : '');
   return mat;
+}
+
+/** 이 재질을 '멀리서는 그림자로 다가오는' 큰·희귀 생물용으로 */
+export function markSilhouette(root: THREE.Object3D | THREE.Material) {
+  const apply = (m: THREE.Material) => {
+    if (!m.defines) m.defines = {};
+    if (m.defines.WATER_SILHOUETTE !== undefined) return;
+    m.defines.WATER_SILHOUETTE = '';
+    m.needsUpdate = true;
+  };
+  if ((root as THREE.Material).isMaterial) { apply(root as THREE.Material); return; }
+  (root as THREE.Object3D).traverse((o) => {
+    const mm = (o as THREE.Mesh).material;
+    if (!mm) return;
+    for (const m of Array.isArray(mm) ? mm : [mm]) if (m.customProgramCacheKey().startsWith('water_')) apply(m);
+  });
 }

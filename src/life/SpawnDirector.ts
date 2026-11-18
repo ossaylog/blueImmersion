@@ -6,6 +6,8 @@ import * as THREE from 'three';
 import type { SpeciesDef, DiverInfo, Creature } from './types';
 import { FishSystem, FishGroup } from './FishSystem';
 import { Turtle, Manta, Stingray, JellySwarm, withSeed } from './Megafauna';
+import { markSilhouette } from '../water/WaterShading';
+import { isGrand, tierOf } from '../data/codex';
 import { Ecology, type Plan } from './Ecology';
 
 const _v = new THREE.Vector3();
@@ -20,6 +22,8 @@ const LOST_GRACE = 1.0;    // 시야에서 벗어난 뒤 이 시간이 지나면
 const SPECIES_REPEAT = 60; // 같은 종은 60초 안에 다시 알리지 않음
 /** 이 거리 안에 들어온 계획만 실제 생물로 만듦 (물속 가시거리보다 넉넉히) */
 const SPAWN_R = 48, DROP_R = 58;
+/** 큰·희귀 생물은 더 멀리서부터 (그림자로) 보이기 시작 */
+const SPAWN_R_GRAND = 70, DROP_R_GRAND = 80;
 
 type Watch = { vis: number; lastVis: number; seen: boolean };
 type Mover = Turtle | Manta | Stingray | JellySwarm;
@@ -39,6 +43,8 @@ export class SpawnDirector {
   extra: Creature[] = [];
   private watch = new Map<Creature, Watch>();
   private queue: Creature[] = [];
+  /** 생물이 처음 화면에 충분히 보였을 때 (컬렉션 기록용 · 알림과 별개로 즉시) */
+  onSighted?: (sp: SpeciesDef, c: Creature) => void;
   private shown: { c: Creature; at: number } | null = null;
   /** 도감에 아직 없는 종이면 60초 반복 제한 없이 알림 (첫 만남을 놓치지 않도록) */
   isCollected?: (id: string) => boolean;
@@ -72,8 +78,9 @@ export class SpawnDirector {
       const at = p.path.at(T, _v);
       const dist = Math.hypot(at.x - cam.x, at.z - cam.z, (at.y - cam.y) * 0.6);
       const have = this.inst.get(p.key);
-      if (!have && dist < SPAWN_R && T < p.end) this.create(p, T, d);
-      else if (have && dist > DROP_R) this.drop(p.key);
+      const grand = isGrand(p.sp);
+      if (!have && dist < (grand ? SPAWN_R_GRAND : SPAWN_R) && T < p.end) this.create(p, T, d);
+      else if (have && dist > (grand ? DROP_R_GRAND : DROP_R)) this.drop(p.key);
     }
     for (const k of [...this.inst.keys()]) if (!live.has(k)) this.drop(k);
   }
@@ -99,6 +106,8 @@ export class SpawnDirector {
       else if (sp.behavior === 'stingray') { const m = new Stingray(sp, this.scene, at).attach(p, T); this.movers.push(m); list.push(m); }
       else list.push(this.fish.spawnPlan(p, T));
     });
+    // 큰·희귀 생물: 멀리서는 물빛보다 어두운 실루엣으로 다가오다 가까워지면 색이 드러남
+    if (isGrand(sp)) for (const c of list) { const r = (c as { root?: THREE.Object3D }).root; if (r) markSilhouette(r); }
     this.inst.set(p.key, list);
     this.active.push(...list);
     this.onSpawn?.(sp);
@@ -121,7 +130,8 @@ export class SpawnDirector {
   private visible(c: Creature): boolean {
     const cam = this.camera;
     const sp = c.sp;
-    const maxD = sp.seeDist ?? THREE.MathUtils.clamp(sp.length * 6, 5, 18);
+    // 흔함·보통 등급은 작은 생물이라도 7m 안에서 보이면 인정 (바닥 생물을 바로 위에서 지나쳐야만 기록되던 문제)
+    const maxD = Math.max(sp.seeDist ?? THREE.MathUtils.clamp(sp.length * 6, 5, 18), tierOf(sp.id) <= 1 ? 7 : 0);
     const test = (p: THREE.Vector3) => cam.position.distanceTo(p) < maxD && _frustum.containsPoint(p);
     if (c instanceof FishGroup) {
       for (const a of c.agents) if (test(a.pos)) return true;
@@ -147,6 +157,8 @@ export class SpawnDirector {
       if (!w.seen && w.vis >= SEEN_DWELL) {
         w.seen = true;
         c.encountered = true;
+        // 컬렉션 기록은 보이는 즉시 (이름 알림 차례를 기다리다 시야에서 사라지면 기록이 안 되던 문제)
+        this.onSighted?.(c.sp, c);
         const last = this.lastSeen.get(c.sp.id) ?? -1e9;
         this.lastSeen.set(c.sp.id, this.clock);
         const dup = this.queue.some((q) => q.sp.id === c.sp.id) || this.shown?.c.sp.id === c.sp.id;

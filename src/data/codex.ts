@@ -82,3 +82,8 @@ export const RESIDENT_SPECIES: Record<string, SpeciesDef> = {
 };
 
 export const tierOf = (id: string): Tier => CODEX[id]?.tier ?? 0;
+
+/** 멀리서 그림자로 먼저 나타나는 생물: 덩치가 크거나(대형·초대형) 희귀·전설 등급 */
+export function isGrand(sp: { id: string; sizeClass?: string }) {
+  return sp.sizeClass === 'large' || sp.sizeClass === 'mega' || tierOf(sp.id) >= 2;
+}

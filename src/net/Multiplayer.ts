@@ -7,6 +7,7 @@ import { Diver, GEAR_ORDER, type Pose, type GearSet, type Motion } from '../char
 import type { Bubbles } from '../water/Bubbles';
 import { disposeTree } from '../core/math';
 import { clockSample } from '../core/worldClock';
+import { checkChat } from '../../server/chatFilter.js';
 
 const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 
@@ -32,12 +33,17 @@ export interface NetState {
   g?: number;                     // 착용한 장비 비트마스크 (GEAR_ORDER)
   su?: 0 | 1;                     // 다이빙 슈트
   rl?: 0 | 1;                     // 손잡이 잡음
+  wv?: number;                    // 손 인사 횟수 (바뀌면 받는 쪽에서 손을 흔듦)
 }
+
+/** 채팅 한 줄 */
+export interface ChatMsg { id: string; nick: string; x: string; at: number; mine: boolean; hue: number }
 
 interface Snap { at: number; s: NetState }
 interface Peer {
   id: string; nick: string; snaps: Snap[]; last: number;
   diver: Diver | null; gear: GearSet; gmask: number; tag: HTMLDivElement; hue: number; bubbleT: number;
+  wv: number | null; waveQ: boolean; sayT: number;
 }
 
 const SEND_HZ = 10, DELAY = 0.14, TIMEOUT = 6;
@@ -54,6 +60,14 @@ export class Multiplayer {
   mode: 'ws' | 'local' | 'off' = 'off';
   onPeersChanged?: () => void;
   onNotice?: (text: string) => void;
+  /** 새 채팅 (history = 접속할 때 받은 최근 대화) */
+  onChat?: (m: ChatMsg, history: boolean) => void;
+  /** 내가 보낸 말이 거절됨 */
+  onChatRefused?: (why: string) => void;
+  /** 다른 사람이 손을 흔듦 (월드 위치) */
+  onWave?: (nick: string, at: THREE.Vector3) => void;
+  chatLog: ChatMsg[] = [];
+  private mySayT = 0;
   private ws: WebSocket | null = null;
   private bc: BroadcastChannel | null = null;
   private sendT = 0;
@@ -94,7 +108,7 @@ export class Multiplayer {
   private makeTag(nick: string, me = false) {
     const el = document.createElement('div');
     el.className = 'ntag' + (me ? ' me' : '');
-    el.innerHTML = `<i></i><span></span>`;
+    el.innerHTML = `<em class="say"></em><i></i><span></span>`;
     (el.querySelector('span') as HTMLElement).textContent = nick;
     this.tagLayer.appendChild(el);
     return el;
@@ -143,6 +157,7 @@ export class Multiplayer {
       const m = e.data;
       if (!m || m.id === this.id) return;
       if (m.t === 'bye') { this.removePeer(m.id); return; }
+      if (m.t === 'chat') { const r = checkChat(m.x); if (r.ok) this.addChat(m.id, m.nick, r.text, m.at); return; }
       if (m.t === 'state') {
         if (!this.peers.has(m.id)) { this.addPeer(m.id, m.nick); this.onNotice?.(`${m.nick} 님이 접속했어요`); }
         this.pushState(m.id, m.s);
@@ -153,13 +168,16 @@ export class Multiplayer {
   }
   private closeLocal() { if (this.bc) { this.bc.postMessage({ t: 'bye', id: this.id }); this.bc.close(); this.bc = null; } }
 
-  private onMsg(m: { t: string; id?: string; nick?: string; s?: NetState | number; c?: number; peers?: { id: string; nick: string; s: NetState | null }[] }) {
+  private onMsg(m: { t: string; id?: string; nick?: string; s?: NetState | number; c?: number; peers?: { id: string; nick: string; s: NetState | null }[]; chat?: { id: string; nick: string; x: string; at: number }[]; x?: unknown; at?: number; why?: string }) {
     if (m.t === 'time') { if (typeof m.c === 'number' && typeof m.s === 'number') clockSample(m.c, m.s); return; }
     if (m.t === 'welcome') {
       this.online = true; this.mode = 'ws';
       if (m.id) this.id = m.id;
       if (m.nick && m.nick !== this.nick) { this.nick = m.nick; (this.myTag.querySelector('span') as HTMLElement).textContent = m.nick; }
       for (const p of m.peers ?? []) { this.addPeer(p.id, p.nick); if (p.s) this.pushState(p.id, p.s); }
+      // 접속 전 최근 대화 (다시 연결된 경우 이미 받은 것은 건너뜀)
+      const seen = new Set(this.chatLog.map((c) => `${c.at}|${c.x}`));
+      for (const c of (m.chat ?? [])) if (!seen.has(`${c.at}|${c.x}`)) this.addChat(c.id, c.nick, c.x, c.at, true);
       this.onPeersChanged?.();
     } else if (m.t === 'join' && m.id) {
       this.addPeer(m.id, m.nick ?? '다이버');
@@ -168,11 +186,40 @@ export class Multiplayer {
       if (!this.peers.has(m.id)) this.addPeer(m.id, '다이버');
       this.pushState(m.id, m.s);
     } else if (m.t === 'leave' && m.id) this.removePeer(m.id);
+    else if (m.t === 'chat' && m.id && typeof m.x === 'string') this.addChat(m.id, m.nick ?? '다이버', m.x, m.at ?? Date.now());
+    else if (m.t === 'chatNo') this.onChatRefused?.(String(m.why ?? 'bad'));
+  }
+
+  // ───────── 채팅 ─────────
+  /** 보내기 전 같은 필터로 미리 확인 → 거절 사유를 바로 안내 (최종 판정은 서버) */
+  sendChat(raw: string): boolean {
+    const r = checkChat(raw);
+    if (!r.ok) { this.onChatRefused?.(r.why); return false; }
+    if (this.ws && this.online && this.ws.readyState === 1) { this.ws.send(JSON.stringify({ t: 'chat', x: r.text })); return true; }
+    // 서버 없음: 같은 브라우저의 다른 탭끼리 (또는 혼자)
+    const at = Date.now();
+    this.bc?.postMessage({ t: 'chat', id: this.id, nick: this.nick, x: r.text, at });
+    this.addChat(this.id, this.nick, r.text, at);
+    return true;
+  }
+  private addChat(id: string, nick: string, x: string, at: number, history = false) {
+    const mine = id === this.id;
+    const peer = this.peers.get(id);
+    const c: ChatMsg = { id, nick, x, at, mine, hue: peer?.hue ?? hashHue(id + nick) };
+    this.chatLog.push(c);
+    if (this.chatLog.length > 120) this.chatLog.shift();
+    // 머리 위 말풍선 (최근 접속 전 대화는 띄우지 않음)
+    if (!history) {
+      const tag = mine ? this.myTag : peer?.tag;
+      if (tag) { (tag.querySelector('.say') as HTMLElement).textContent = x; tag.classList.add('saying'); }
+      if (mine) this.mySayT = 6; else if (peer) peer.sayT = 6;
+    }
+    this.onChat?.(c, history);
   }
 
   private addPeer(id: string, nick: string) {
     if (this.peers.has(id)) return;
-    this.peers.set(id, { id, nick, snaps: [], last: this.clock, diver: null, gear: 'none', gmask: 0, tag: this.makeTag(nick), hue: hashHue(id + nick), bubbleT: Math.random() * 4 });
+    this.peers.set(id, { id, nick, snaps: [], last: this.clock, diver: null, gear: 'none', gmask: 0, tag: this.makeTag(nick), hue: hashHue(id + nick), bubbleT: Math.random() * 4, wv: null, waveQ: false, sayT: 0 });
     this.onPeersChanged?.();
   }
 
@@ -189,6 +236,9 @@ export class Multiplayer {
     const p = this.peers.get(id);
     if (!p || !s || !Array.isArray(s.p)) return;
     p.last = this.clock;
+    // 손 인사: 처음 받은 값은 기준으로만 (접속 직후 예전 인사를 다시 재생하지 않게)
+    const wv = typeof s.wv === 'number' ? s.wv : 0;
+    if (p.wv === null) p.wv = wv; else if (wv !== p.wv) { p.wv = wv; p.waveQ = true; }
     p.snaps.push({ at: this.clock, s });
     if (p.snaps.length > 12) p.snaps.shift();
   }
@@ -196,6 +246,9 @@ export class Multiplayer {
   // ───────── 매 프레임 ─────────
   update(dt: number, t: number, local: NetState) {
     this.clock += dt;
+    // 말풍선 시간
+    if (this.mySayT > 0 && (this.mySayT -= dt) <= 0) this.myTag.classList.remove('saying');
+    for (const p of this.peers.values()) if (p.sayT > 0 && (p.sayT -= dt) <= 0) p.tag.classList.remove('saying');
     // 보내기 (10Hz)
     this.sendT -= dt;
     if (this.sendT <= 0) {
@@ -256,6 +309,7 @@ export class Multiplayer {
     d.root.rotation.order = 'YXZ';
     d.root.rotation.set(lerpAngle(a.s.r[0], b.s.r[0], u), lerpAngle(a.s.r[1], b.s.r[1], u), lerpAngle(a.s.r[2], b.s.r[2], u));
     d.pose = b.s.po; d.motion = b.s.mo ?? 'fwd'; d.speed = THREE.MathUtils.lerp(a.s.sp, b.s.sp, u);
+    if (p.waveQ) { p.waveQ = false; d.startWave(); this.onWave?.(p.nick, d.root.position); }
     d.update(dt, t);
     // 스쿠버 다이버는 레귤레이터 기포를 주기적으로 내뿜음 (서로 위치를 알아보기 쉽게)
     if (want === 'scuba' && d.root.position.y < -0.8) {
@@ -297,6 +351,18 @@ export class Multiplayer {
       p.tag.dataset.mode = p.gear;
       place(p.tag, vis ? d!.headWorld(_b) : null, vis);
     }
+  }
+
+  /** 가장 가까이 보이는 다른 다이버 (월드 좌표 기준) */
+  nearest(at: THREE.Vector3): { nick: string; dist: number; pos: THREE.Vector3 } | null {
+    let best: { nick: string; dist: number; pos: THREE.Vector3 } | null = null;
+    for (const p of this.peers.values()) {
+      const d = p.diver;
+      if (!d || !d.root.visible) continue;
+      const dist = d.root.position.distanceTo(at);
+      if (!best || dist < best.dist) best = { nick: p.nick, dist, pos: d.root.position };
+    }
+    return best;
   }
 
   /** 지금 함께 있는 사람 수 (나 포함) */

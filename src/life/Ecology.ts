@@ -248,7 +248,8 @@ export class Ecology {
   constructor(species: SpeciesDef[], lowTier: boolean) {
     // 동시에 바다 전체(반경 82m)에 있는 무리 수 — 저사양은 조금 적게 (같은 서버의 모든 기기가 같은 값을 써야 하므로 등급과 무관하게 고정)
     void lowTier;
-    const targets: Record<Exclude<SizeClass, 'resident'>, number> = { small: 22, medium: 44, large: 10, mega: 2.4 };
+    // 흔함·보통 등급을 쉽게 만날 수 있도록 작은·중간 무리를 넉넉히 (예전 22·44)
+    const targets: Record<Exclude<SizeClass, 'resident'>, number> = { small: 30, medium: 56, large: 10, mega: 2.4 };
     let id = 1;
     for (const cls of ['small', 'medium', 'large', 'mega'] as const) {
       const pool = species.filter((s) => s.sizeClass === cls && s.weight > 0 && tierOf(s.id) < 2);
@@ -293,7 +294,8 @@ export class Ecology {
     const born = k * st.slot + r() * st.slot * 0.5;
     const cands: { sp: SpeciesDef; p: THREE.Vector3; w: number }[] = [];
     for (let c = 0; c < 6; c++) {
-      const a = r() * Math.PI * 2, d = AREA_R * Math.pow(r(), 0.7);
+      // 다이버가 주로 머무는 리프 중심 쪽에 조금 더 모이게 (예전 지수 0.7)
+      const a = r() * Math.PI * 2, d = AREA_R * Math.pow(r(), 0.95);
       const x = Math.sin(a) * d, z = Math.cos(a) * d;
       const yu = r();
       for (const sp of st.pool) {
@@ -304,7 +306,7 @@ export class Ecology {
         let h = 0;
         for (const key in sp.habitats) h = Math.max(h, sp.habitats[key as Habitat] * hab[key as Habitat]);
         if (h < 0.08) continue;
-        cands.push({ sp, p: V3(x, y, z), w: sp.weight * h * (tierOf(sp.id) === 1 ? 0.55 : 1) });
+        cands.push({ sp, p: V3(x, y, z), w: sp.weight * h * (tierOf(sp.id) === 1 ? 0.9 : 1) });
       }
     }
     if (!cands.length) return null;

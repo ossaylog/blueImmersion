@@ -1,7 +1,7 @@
 // 전체 체험 흐름 오케스트레이션 (상태머신 + 연출)
 import * as THREE from 'three';
 import { Engine } from './core/Engine';
-import { detectQuality, type Quality } from './core/quality';
+import { detectQuality, markGraphicsLost, type Quality } from './core/quality';
 import { store, type Mode, type View } from './core/store';
 import { clamp, damp, dampAngle } from './core/math';
 import { waterUniforms } from './water/WaterShading';
@@ -13,13 +13,14 @@ import { Particles } from './water/Particles';
 import { Bubbles } from './water/Bubbles';
 import { buildSeabed } from './world/Seabed';
 import { CoralReef } from './world/CoralReef';
+import { mergeStatic } from './world/mergeStatic';
 import { Residents } from './world/Residents';
 import { Boat } from './world/Boat';
 import {
   Pontoon, MD, UD, SP, SNORKEL_SPOTS, SCUBA_SPOTS, SNORKEL_LANES, SCUBA_LANES, HINGE, MAIN_LANE,
   routeSnorkelEntry, routeScubaEntry, snorkelSeat, snorkelFloat, scubaEntry, type Spot,
 } from './world/Pontoon';
-import { DeckMover, loungerSide, loungerLie, type Lounger, type ZoneId } from './world/Deck';
+import { DeckMover, loungerSide, loungerLie, planDeckPath, deckGoalAt, type Lounger, type ZoneId, type DeckWaypoint } from './world/Deck';
 import { MapView, type MapState } from './ui/MapView';
 import { Walker, type WayPt } from './world/Walker';
 import { FishSystem } from './life/FishSystem';
@@ -29,7 +30,7 @@ import { Collection } from './life/Collection';
 import { RESIDENT_SPECIES, tierOf } from './data/codex';
 import type { SpeciesDef, DiverInfo, Creature } from './life/types';
 import speciesData from './data/species.json';
-import { Diver, type Pose } from './character/Diver';
+import { Diver, type Pose, HIP_STAND } from './character/Diver';
 import { Input } from './control/Input';
 import { CameraRig } from './control/CameraRig';
 import { SnorkelController, ScubaController, colliders } from './control/Controllers';
@@ -37,10 +38,12 @@ import { DiveComputer } from './dive/DiveComputer';
 import { AudioEngine } from './audio/Audio';
 import { UI } from './ui/UI';
 import { Multiplayer, type NetState } from './net/Multiplayer';
+import { FPHand } from './character/FPHand';
 import { worldNow } from './core/worldClock';
 
 const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
-const LEG = 0.93;           // 발바닥 → 골반 높이
+/** 발바닥 → 골반 높이 (다리를 편 채 선 자세) — 캐릭터 체형에서 계산 */
+const LEG = HIP_STAND - 0.001;
 const START_Z = -235;       // 출발 지점 (깊은 바다)
 const BERTH = V3(-9.6, 0, -7.7); // 판툰 좌현 계류 위치 (배 중심)
 type Act = (dt: number) => boolean; // true를 돌려주면 다음 동작으로
@@ -70,10 +73,21 @@ export class App {
   private acts: Act[] = [];
   /** 판툰 위 자유 이동 */
   private deck = new DeckMover();
+  /** 탭/클릭 이동: 남은 웨이포인트 · 도착하면 누울 선베드 · 목적지 표시 */
+  private route: DeckWaypoint[] = [];
+  private routeLounger: Lounger | null = null;
+  private routeStuck = 0;
+  private routeMark?: THREE.Mesh;
+  private ray = new THREE.Raycaster();
   private lying: Lounger | null = null;
   private lieState: 'none' | 'going' | 'lying' | 'rising' = 'none';
   private zoneSeen: ZoneId | null = null;
   private zoneDismissed = new Set<ZoneId>();
+  /** 손 인사: 보낸 횟수(다른 사람에게 전달) · 1인칭 손 · 가까운 다이버 안내 */
+  private waveN = 0;
+  private fpHand!: FPHand;
+  private nearT = 0;
+  private nearSeen = new Map<string, number>();
   map!: MapView;
   private spot: Spot = SNORKEL_SPOTS[0];
   private lane = 0;
@@ -98,14 +112,31 @@ export class App {
   constructor() {
     const canvas = document.getElementById('scene') as HTMLCanvasElement;
     this.engine = new Engine(canvas, this.q);
-    this.engine.onContextLost = () => this.ui?.hint('그래픽 메모리가 부족해 화면을 다시 준비하고 있어요…', true, 8);
-    // 복구된 컨텍스트에서는 셰이더·버퍼를 다시 만들어야 해 안전하게 새로고침 (컬렉션은 저장되어 있음)
-    this.engine.onContextRestored = () => location.reload();
+    // 그래픽(WebGL)이 끊겼을 때
+    //  · 다른 앱으로 전환해 화면이 숨겨진 동안 끊긴 건 정상 (폰이 메모리를 회수) → 돌아오면 복구 신호를 기다려 그대로 이어감
+    //  · 보이는 상태에서 끊겼고 3초 안에 복구되지 않으면 → 기록 후 새로고침 (다음 시작은 화질 한 단계 낮춤)
+    let lostTimer = 0;
+    const armReload = () => {
+      clearTimeout(lostTimer);
+      lostTimer = window.setTimeout(() => { if (this.engine.contextLost && !document.hidden) { markGraphicsLost(); this.saveSession(); location.reload(); } }, 3000);
+    };
+    this.engine.onContextLost = () => {
+      if (document.hidden) return;   // 백그라운드: 돌아왔을 때 판단
+      this.ui?.hint('그래픽을 다시 준비하고 있어요…', true, 4);
+      armReload();
+    };
+    this.engine.onContextRestored = () => { clearTimeout(lostTimer); this.engine.resize(); };
+    addEventListener('visibilitychange', () => {
+      if (document.hidden) { this.saveSession(); return; }
+      if (this.engine.contextLost) armReload();
+    });
+    addEventListener('pagehide', () => this.saveSession());
     this.scene = this.engine.scene; this.camera = this.engine.camera;
     this.input = new Input(canvas);
     this.rig = new CameraRig(this.camera);
     this.ui = new UI(document.getElementById('ui')!, {
-      board: () => this.board(), skip: () => { this.cruiseU = Math.max(this.cruiseU, 0.999); },
+      board: () => this.board(), skip: () => this.skipCruise(),
+      sendChat: (text) => this.net.sendChat(text), wave: () => this.wave(),
       select: (m, v) => this.select(m, v),
       dismissZone: () => { if (this.ui.zone) this.zoneDismissed.add(this.ui.zone); this.ui.showZone(null); },
       returnToBoat: () => this.returnToBoat(), toggleView: () => this.toggleView(),
@@ -116,29 +147,39 @@ export class App {
       if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
       if (e.code === 'KeyV' && !e.repeat) this.toggleView();
       if (e.code === 'KeyM' && !e.repeat) this.toggleMap();
-      if (e.code === 'Escape') { if (this.map?.isOpen) this.map.close(); else if (this.ui.codexOpen) this.ui.closeCodex(); else store.set({ settingsOpen: !store.get().settingsOpen }); }
+      if (e.code === 'KeyH' && !e.repeat) this.wave();
+      if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !e.repeat && !this.ui.chatOpen) { e.preventDefault(); this.ui.toggleChat(true); }
+      if (e.code === 'Escape') { if (this.ui.chatOpen) this.ui.toggleChat(false); else if (this.map?.isOpen) this.map.close(); else if (this.ui.codexOpen) this.ui.closeCodex(); else store.set({ settingsOpen: !store.get().settingsOpen }); }
     });
   }
 
   async init() {
     const sc = this.scene;
-    const L = (p: number) => this.ui.setLoading(p);
+    // 로딩 단계별 소요 시간 (window.__load 로 확인 가능)
+    const T: [string, number][] = ((window as unknown as { __load: [string, number][] }).__load = [['init', Math.round(performance.now())]]);
+    const STEP: Record<string, string> = {
+      'sky+surface': '해저 지형을 만드는 중', seabed: '산호초를 키우는 중', reef: '물고기들을 풀어놓는 중',
+      'fish+residents': '판툰과 보트를 띄우는 중', 'boat+pontoon+diver+net': '빛과 물빛을 준비하는 중', compile: '거의 다 됐어요',
+    };
+    const L = (p: number, tag = String(p)) => { this.ui.setLoading(p, STEP[tag]); T.push([tag, Math.round(performance.now())]); };
+    this.ui.setLoading(0.05, '하늘과 바다 수면을 그리는 중');
+    await tick();
     this.hemi = new THREE.HemisphereLight(0x9cc8ff, 0x3a4a48, 0.9);
     this.sun = new THREE.DirectionalLight(0xfff3e0, 3.0);
     this.sun.position.copy(waterUniforms.uSunDir.value).multiplyScalar(100);
     sc.add(this.hemi, this.sun);
     this.sky = new Sky(sc);
     this.horizon = new Horizon(sc);
-    this.surface = new OceanSurface(sc, this.q.surfaceSegments); L(0.15); await tick();
+    this.surface = new OceanSurface(sc, this.q.surfaceSegments); L(0.15, 'sky+surface'); await tick();
     this.shafts = new LightShafts(sc, this.q.shafts);
     this.particles = new Particles(sc, this.q.particles, this.q.pixelRatio);
     this.bubbles = new Bubbles(sc);
-    buildSeabed(sc, this.q.terrainSegments); L(0.35); await tick();
-    this.reef = new CoralReef(sc, this.q.coralDensity); L(0.7); await tick();
+    buildSeabed(sc, this.q.terrainSegments); L(0.35, 'seabed'); await tick();
+    this.reef = new CoralReef(sc, this.q.coralDensity, this.q.coralNear, this.q.coralFar); L(0.7, 'reef'); await tick();
     this.fish = new FishSystem(sc, this.reef, this.species, this.q.fishScale);
-    this.residents = new Residents(sc, this.reef, this.fish, this.species, this.q.tier === 'low'); L(0.85); await tick();
-    this.benthic = new Benthic(sc, this.q.tier === 'low');
-    this.director = new SpawnDirector(sc, this.camera, this.fish, this.species, this.q.tier === 'low');
+    this.residents = new Residents(sc, this.reef, this.fish, this.species, this.q.tier !== 'high'); L(0.85, 'fish+residents'); await tick();
+    this.benthic = new Benthic(sc, this.q.tier !== 'high');
+    this.director = new SpawnDirector(sc, this.camera, this.fish, this.species, this.q.tier !== 'high');
     // 바다 생물 컬렉션: 회유 생물 + 바닥 생물 + 정주 생물 전부
     this.collection = new Collection([...this.species, ...BENTHIC_SPECIES, ...Object.values(RESIDENT_SPECIES)]);
     this.ui.setCollection(this.collection);
@@ -150,23 +191,26 @@ export class App {
       sp: residentSp[p.id], alive: true, leaving: false, life: 1e9, encountered: false, center: () => p.pos, leave: () => {},
     }));
     this.director.extra = [...this.benthic.creatures, ...spots];
-    // 생물 이름은 실제로 화면에 보이는 동안만 표시 (보이기 시작할 때 표시 → 시야에서 사라지면 숨김)
-    this.director.onEncounter = (sp, c) => {
+    // 처음 보는 생물은 보이는 즉시 컬렉션에 기록하고 그 순간의 모습을 사진으로 남김
+    const fresh = new Map<string, number>();   // 이번에 새로 등록된 종 → 등록 시각 (알림에 NEW 표시용)
+    this.director.onSighted = (sp, c) => {
       const tier = tierOf(sp.id);
       const isNew = this.collection.record(sp, Math.max(0, -this.camera.position.y));
-      this.ui.toast(sp.nameKo, `${sp.nameEn} · ${sp.sci}`, tier, isNew);
-      const needPhoto = isNew || !this.collection.photos[sp.id];
-      if (needPhoto) {
-        // 지금 내 시야에서 그 생물을 찍어 컬렉션 사진으로 보관
+      if (isNew) fresh.set(sp.id, performance.now());
+      if (isNew || !this.collection.photos[sp.id]) {
         this.capturePhoto(c, (url) => {
           if (url) this.collection.setPhoto(sp.id, url);
           if (isNew && tier >= 2) this.ui.discover(sp, url);
         });
       }
-      if (isNew) {
-        this.ui.updateCodexCount();
-        this.audio.chime(tier >= 2 ? tier : 0);
-      }
+      if (isNew) { this.ui.updateCodexCount(); this.audio.chime(tier >= 2 ? tier : 0); }
+    };
+    // 생물 이름은 실제로 화면에 보이는 동안만 표시 (보이기 시작할 때 표시 → 시야에서 사라지면 숨김)
+    this.director.onEncounter = (sp) => {
+      const t = fresh.get(sp.id);
+      const isNew = t !== undefined && performance.now() - t < 20000;
+      fresh.delete(sp.id);
+      this.ui.toast(sp.nameKo, `${sp.nameEn} · ${sp.sci}`, tierOf(sp.id), isNew);
     };
     this.director.onRareSpawn = (sp, tier) => {
       if (tier === 3 && sp.id !== 'humpback' && store.get().phase === 'swim') this.ui.hint('푸른 물 너머로 커다란 그림자가 스친 것 같아요…', false, 5);
@@ -176,14 +220,26 @@ export class App {
     this.boat = new Boat(sc);
     this.boat.root.position.set(BERTH.x, 0, START_Z);
     this.pontoon = new Pontoon(sc);
+    // 움직이지 않는 판툰·보트 부품은 재질별로 합쳐 그리기 호출을 줄임 (현문 사다리는 움직이므로 제외)
+    mergeStatic(this.boat.root);
+    mergeStatic(this.pontoon.root, [this.pontoon.gangway]);
     colliders.push((p, r) => this.pontoon.collide(p, r), (p, r) => store.get().phase === 'swim' && this.boat.collide(p, r));
     this.diver = new Diver(sc);
     this.map = new MapView(document.getElementById('hud')!, document.getElementById('ui')!);
     // 멀티유저: 같은 서버(또는 같은 브라우저의 다른 탭)에 접속한 다이버들을 함께 표시 (판툰 기준 좌표로 공유)
     this.net = new Multiplayer(sc, this.camera, this.bubbles, document.getElementById('ui')!, this.pontoon.root);
-    this.net.onPeersChanged = () => this.ui.setOnline(this.net.count, this.net.nick, this.net.mode);
+    this.net.onPeersChanged = () => { this.ui.setOnline(this.net.count, this.net.nick, this.net.mode); this.ui.setChatWho(this.net.count); };
     this.net.onNotice = (text) => this.ui.mpNotice(text);
+    this.net.onChat = (c, history) => this.ui.addChat(c, history);
+    this.net.onChatRefused = (why) => this.ui.chatRefused(why);
+    this.net.onWave = (nick, at) => {
+      // 내 근처(보이는 거리)에서 손을 흔들면 알려 줌
+      const me = this.fp ? this.camera.position : this.diver.root.position;
+      if (at.distanceTo(me) < 25) this.ui.mpNotice(`👋 ${nick} 님이 손을 흔들어요`);
+    };
+    this.fpHand = new FPHand(sc, this.diver, this.camera);
     this.ui.setOnline(this.net.count, this.net.nick, this.net.mode);
+    this.ui.setChatWho(this.net.count);
     this.scuba.onInhale = () => this.audio.inhale(this.scuba.depth);
     this.scuba.onExhale = () => { this.audio.exhale(); this.emitExhale(); };
     this.snorkel.onBreath = (inh) => this.audio.snorkelBreath(inh);
@@ -194,19 +250,37 @@ export class App {
       this.audio.surfaceBreath();
       this.bubbles.burst(this.diver.headWorld(V3()).add(V3(0, 0.15, 0)), 10, 0.1);
     };
-    L(1);
+    L(0.95, 'boat+pontoon+diver+net');
+    await tick();
     // 셰이더 미리 컴파일 (첫 입수 때 끊김 방지)
     this.camera.position.set(0, -3, 0); this.camera.lookAt(5, -4, 5);
     this.engine.renderer.compile(sc, this.camera);
+    L(1, 'compile');
     this.engine.onFrame = (dt, t) => this.frame(dt, t);
     this.engine.start();
     (window as unknown as { app: App }).app = this;
-    setTimeout(() => store.set({ phase: 'title' }), 300);
+    setTimeout(() => { store.set({ phase: 'title' }); this.ui.hideBoot(); }, 300);
     // URL 파라미터로 단계 바로가기 (개발·검수용): ?go=snorkel | scuba | deck | dock  &view=fp
     const qs = new URLSearchParams(location.search);
     const go = qs.get('go');
     if (qs.get('view') === 'fp') store.set({ view: 'first' });
     if (go === 'snorkel' || go === 'scuba') setTimeout(() => this.debugJump(go), 400);
+    // 다른 앱에 다녀온 사이 폰이 페이지를 정리해 새로 열렸다면: 처음부터가 아니라 있던 곳(판툰/물속)에서 이어서
+    const prev = !go ? this.loadSession() : null;
+    if (prev) {
+      if (prev.view) store.set({ view: prev.view });
+      // 소리는 사용자가 화면을 한 번 만져야 켤 수 있음 (브라우저 정책) → 첫 터치·클릭·키 입력 때 시작
+      const unlock = () => {
+        this.audio.start(); this.audio.applySettings(store.get().audio, store.get().muted);
+        const ph = store.get().phase, m = store.get().mode;
+        this.audio.setScene(ph === 'swim' && m ? (this.camera.position.y < 0 ? m : 'air') : 'air');
+        removeEventListener('pointerdown', unlock); removeEventListener('keydown', unlock);
+      };
+      addEventListener('pointerdown', unlock); addEventListener('keydown', unlock);
+      const resumeHint = () => setTimeout(() => this.ui.hint('다른 앱에 다녀오는 동안 화면이 새로 열렸어요 · 있던 곳에서 이어서 시작해요', false, 5), 900);
+      if (prev.phase === 'swim' && (prev.mode === 'snorkel' || prev.mode === 'scuba')) { const m = prev.mode; setTimeout(() => { this.debugJump(m); resumeHint(); }, 400); }
+      else setTimeout(() => { this.dockBoat(); this.enterDeck(V3(0.9, MD, MAIN_LANE), Math.PI / 2); resumeHint(); }, 400);
+    }
     if (go === 'deck') setTimeout(() => { this.dockBoat(); this.camera.position.set(-2, 4, -9); this.enterDeck(V3(0.9, MD, MAIN_LANE), Math.PI / 2); }, 400);
     if (go === 'dock') setTimeout(() => { this.board(); this.cruiseU = 0.999; store.set({ phase: 'cruise' }); }, 400);
   }
@@ -221,6 +295,58 @@ export class App {
     this.camFrame = this.boat.root;
     store.set({ phase: 'boarding' });
     this.phaseT = 0;
+  }
+
+  /** 항해 건너뛰기: 계류·현문 연출 없이 바로 판툰 위에서 시작 */
+  private skipCruise() {
+    const ph = store.get().phase;
+    if (ph !== 'boarding' && ph !== 'cruise' && ph !== 'docking') return;
+    this.ui.fade(true);
+    setTimeout(() => {
+      if (!['boarding', 'cruise', 'docking'].includes(store.get().phase)) { this.ui.fade(false); return; }
+      this.cruiseU = 1; this.dockBoat();
+      this.gangwayClank = true; this.onPontoon = true;
+      this.camFrame = this.pontoon.root;
+      this.audio.setScene('air');
+      this.enterDeck(V3(-4.0, MD, MAIN_LANE + 0.2), Math.PI / 2);
+      // 캐릭터 뒤쪽 위에서 바라보며 시작
+      this.diver.root.updateMatrixWorld(true);
+      const focus = this.deckFocus(), fwd = this.diver.root.getWorldDirection(V3());
+      this.camera.position.copy(focus).addScaledVector(fwd, -3.4).add(V3(0, 1.3, 0));
+      this.rig.toOrbit(focus, 3.6, 0.3);
+      this.ui.fade(false);
+      this.ui.hint(this.q.isTouch
+        ? '판툰에 도착! 가고 싶은 곳을 눌러 걸어가 보세요 · 우현 스노클 존 / 선미 다이빙 데크에서 체험 시작 · 2층 선베드를 누르면 누워 쉬어요'
+        : '판툰에 도착! 가고 싶은 곳을 클릭하면 걸어가요 (WASD도 가능) · 우현 스노클 존 / 선미 다이빙 데크에서 체험 시작 · 2층 선베드를 클릭하면 누워 쉬어요', false, 8);
+    }, 450);
+  }
+
+  /** 손 인사: 내 캐릭터가 오른손을 흔들고(다른 사람에게도 보임), 1인칭이면 내 시야에 손이 올라옴 */
+  wave() {
+    const ph = store.get().phase;
+    if (ph !== 'anchored' && ph !== 'swim' && ph !== 'gearing') return;
+    if (this.diver.waving) return;
+    this.diver.startWave();
+    this.waveN++;
+    if (this.fp) this.fpHand.start();
+    const me = this.fp ? this.camera.position : this.diver.root.position;
+    const n = this.net.nearest(me);
+    if (n && n.dist < 15) this.ui.hint(`👋 ${n.nick} 님에게 손 인사했어요`, false, 2.5);
+  }
+
+  /** 다른 다이버가 가까이 오면: 손 인사 안내 (같은 사람에게는 40초에 한 번) */
+  private updateNearby(dt: number, phase: string) {
+    this.nearT -= dt;
+    if (this.nearT > 0) return;
+    this.nearT = 0.5;
+    if (phase !== 'anchored' && phase !== 'swim') return;
+    const me = this.fp ? this.camera.position : this.diver.root.position;
+    const n = this.net.nearest(me);
+    if (!n || n.dist > 4.5) return;
+    const now = performance.now();
+    if (now - (this.nearSeen.get(n.nick) ?? -1e9) < 40000) return;
+    this.nearSeen.set(n.nick, now);
+    this.ui.hint(`${n.nick} 님이 가까이 있어요 · ${this.q.isTouch ? '👋 인사 버튼' : '👋 H 키'}로 손 인사해 보세요`, false, 4.5);
   }
 
   toggleMap() {
@@ -449,13 +575,13 @@ export class App {
   private finsStandAct(edgeL: THREE.Vector3, yaw: number): Act {
     let a = false, b = false;
     const P = this.pontoon.root, d = this.diver;
-    const rootL = edgeL.clone().setY(edgeL.y + 0.9);
+    const rootL = edgeL.clone().setY(edgeL.y + HIP_STAND);
     return this.holdAct(rootL, edgeL, yaw, 'steps', 0.18, 2.6, (t) => {
       d.rail = true;
       const leg = t < 1.3 ? 0 : 1;
       const w = Math.sin(Math.PI * clamp(leg === 0 ? (t - 0.1) / 1.1 : (t - 1.4) / 1.1, 0, 1));
       const loc = P.worldToLocal(this.tmpL.copy(this.feetW[leg]));
-      loc.y += w * 0.32; loc.x -= Math.sin(yaw) * w * 0.22; loc.z -= Math.cos(yaw) * w * 0.22;
+      loc.y += w * 0.2; loc.x -= Math.sin(yaw) * w * 0.14; loc.z -= Math.cos(yaw) * w * 0.14;
       P.localToWorld(this.feetW[leg].copy(loc));
       d.root.position.y -= w * 0.05;
       if (!a && t > 0.7) { a = true; d.attach('finL'); }
@@ -544,8 +670,8 @@ export class App {
       this.call(() => {
         this.enterDeck(end, Math.PI / 2);
         this.ui.hint(this.q.isTouch
-          ? '판툰에 도착! 자유롭게 둘러보세요 · 우현 스노클 존 / 선미 다이빙 데크로 가면 체험 시작 · 선수 쪽 계단으로 2층 선베드'
-          : '판툰에 도착! WASD로 자유롭게 둘러보세요 · 우현 스노클 존 / 선미 다이빙 데크로 가면 체험 시작 · 선수 계단으로 2층 선베드', false, 8);
+          ? '판툰에 도착! 가고 싶은 곳을 눌러 걸어가 보세요 · 우현 스노클 존 / 선미 다이빙 데크에서 체험 시작 · 2층 선베드를 누르면 누워 쉬어요'
+          : '판툰에 도착! 가고 싶은 곳을 클릭하면 걸어가요 (WASD도 가능) · 우현 스노클 존 / 선미 다이빙 데크에서 체험 시작 · 2층 선베드를 클릭하면 누워 쉬어요', false, 8);
       }),
     ];
   }
@@ -559,6 +685,7 @@ export class App {
   private enterDeck(pL: THREE.Vector3, yaw: number) {
     store.set({ phase: 'anchored', mode: null });
     this.acts = []; this.lying = null; this.lieState = 'none';
+    this.clearRoute();
     this.diver.clearGear(); this.diver.setSuit(false, true); this.diver.gearSet = 'none';
     this.deck.place(pL, yaw, 'main');
     this.zoneSeen = this.deck.zone(); this.zoneDismissed.clear();
@@ -607,16 +734,23 @@ export class App {
     if (!this.acts.length && this.rig.mode === 'cine') this.applyDeckView();
     if (this.map.isOpen) { inp.move.x = 0; inp.move.y = 0; inp.interact = false; }
     // 선베드에 누워 있는 중: 움직이거나 F를 누르면 일어남
-    if (this.lieState === 'lying' && (inp.interact || Math.hypot(inp.move.x, inp.move.y) > 0.3)) this.riseFromLounger();
+    if (this.lieState === 'lying' && (inp.interact || inp.tap || Math.hypot(inp.move.x, inp.move.y) > 0.3)) this.riseFromLounger();
     if (this.acts.length) {
       this.runActs(dt);
       this.ui.setPrompt(this.lieState === 'lying' ? '일어나기' : '');
       return;
     }
+    // 화면의 한 지점을 누르면 그곳까지 걸어감 (키보드로 움직이면 취소)
+    if (inp.tap && !this.map.isOpen) this.tapDeck(inp.tap.x, inp.tap.y);
+    if (Math.hypot(inp.move.x, inp.move.y) > 0.1 && this.route.length) this.clearRoute();
     const yaw = this.rig.heading;
     const want = V3(Math.sin(yaw), 0, Math.cos(yaw)).multiplyScalar(inp.move.y * 1.45)
       .addScaledVector(V3(-Math.cos(yaw), 0, Math.sin(yaw)), inp.move.x * 1.45);
-    this.deck.update(dt, want, this.fp && this.rig.mode === 'fp' ? yaw : null);
+    const auto = this.followRoute(dt, want);
+    const fpCam = this.fp && this.rig.mode === 'fp';
+    if (auto && fpCam && this.deck.speed > 0.15) this.rig.steer(Math.atan2(this.deck.vel.x, this.deck.vel.z), 2.2, dt);
+    this.deck.update(dt, want, fpCam ? (auto ? this.rig.heading : yaw) : null);
+    if (this.route.length === 0 && this.routeLounger) { const l = this.routeLounger; this.routeLounger = null; this.lieOnLounger(l); this.applyDeckDiver(dt); return; }
     this.applyDeckDiver(dt);
     // 체험 존: 들어서면 시점 선택 카드 (나중에를 누르면 존을 벗어났다 다시 올 때까지 묻지 않음)
     const z = this.deck.zone();
@@ -629,6 +763,55 @@ export class App {
     const l = this.deck.nearLounger();
     this.ui.setPrompt(l ? '선베드에 눕기' : '');
     if (l && inp.interact) this.lieOnLounger(l);
+  }
+
+  /** 탭한 화면 좌표 → 판툰 위 지점 → 경로 */
+  private tapDeck(sx: number, sy: number) {
+    const P = this.pontoon.root;
+    this.ray.setFromCamera(new THREE.Vector2((sx / innerWidth) * 2 - 1, -(sy / innerHeight) * 2 + 1), this.camera);
+    const hits = this.ray.intersectObject(P, true);
+    const visible = (o: THREE.Object3D | null): boolean => { for (; o; o = o.parent) if (!o.visible) return false; return true; };
+    const hit = hits.find((h) => (h.object as THREE.Mesh).isMesh && h.object !== this.routeMark && visible(h.object));
+    if (!hit) { this.ui.hint('판툰 바닥을 눌러 이동해요', false, 2); return; }
+    const l = P.worldToLocal(hit.point.clone());
+    // 2층 바닥 아랫면(천장)을 누르면 1층 그 자리로
+    const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : null;
+    if (n && n.y < -0.3) l.y = MD;
+    const g = deckGoalAt(l.x, l.y, l.z);
+    if (!g) { this.ui.hint('그곳으로는 걸어갈 수 없어요', false, 2); return; }
+    const path = planDeckPath(this.deck, g.goal);
+    if (!path) { this.ui.hint('그곳으로 가는 길이 없어요', false, 2); return; }
+    this.route = path; this.routeLounger = g.lounger; this.routeStuck = 0;
+    this.showRouteMark(g.goal.x, g.goal.level === 'upper' ? UD : MD, g.goal.z);
+  }
+  private clearRoute() {
+    this.route = []; this.routeLounger = null;
+    if (this.routeMark) this.routeMark.visible = false;
+  }
+  private showRouteMark(x: number, y: number, z: number) {
+    if (!this.routeMark) {
+      const m = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.24, 32), new THREE.MeshBasicMaterial({ color: 0x5fe0e6, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }));
+      m.rotation.x = -Math.PI / 2; m.renderOrder = 5;
+      this.pontoon.root.add(m); this.routeMark = m;
+    }
+    this.routeMark.position.set(x, y + 0.03, z); this.routeMark.visible = true; this.routeMark.scale.setScalar(1.4);
+  }
+  /** 경로 따라 걷기: want(로컬 m/s)를 채움 · 걷는 중이면 true */
+  private followRoute(dt: number, want: THREE.Vector3) {
+    if (this.routeMark?.visible) { const k = this.routeMark.scale.x; this.routeMark.scale.setScalar(damp(k, 1, 6, dt)); }
+    if (!this.route.length) return false;
+    const p = this.deck.pos;
+    let w = this.route[0];
+    let d = Math.hypot(w.x - p.x, w.z - p.z);
+    while (!w.final && d < 0.28 && this.route.length > 1) { this.route.shift(); w = this.route[0]; d = Math.hypot(w.x - p.x, w.z - p.z); }
+    if (w.final && d < 0.12) { this.route = []; if (this.routeMark) this.routeMark.visible = false; return false; }
+    // 마지막 지점 가까이에선 천천히 멈춤
+    const v = w.final ? Math.min(1.45, 0.35 + d * 1.6) : 1.45;
+    want.set((w.x - p.x) / d * v, 0, (w.z - p.z) / d * v);
+    // 가구에 막혀 오래 못 가면 포기
+    this.routeStuck = this.deck.speed < 0.12 ? this.routeStuck + dt : 0;
+    if (this.routeStuck > 1.4) { this.clearRoute(); this.ui.hint('길이 막혔어요 · 다른 곳을 눌러 보세요', false, 2); return false; }
+    return true;
   }
 
   /** 선베드: 옆에 서서 → 가장자리에 앉고 → 다리를 올려 등을 기대고 누움 */
@@ -644,7 +827,7 @@ export class App {
       this.walkAct(this.wp(P, [this.deck.pos.clone(), side]), 1, 'follow'),
       this.sitAct(sitRoot, sitFeet, faceOut, 1.0, 0.05),
       this.lieAct(loungerLie(l), 1.7, true),
-      this.call(() => { this.lieState = 'lying'; this.ui.hint('선베드에서 쉬는 중 · 드래그로 주변 바다를 둘러보세요 · 움직이면 일어나요', false, 5); }),
+      this.call(() => { this.lieState = 'lying'; this.ui.hint(this.q.isTouch ? '선베드에서 쉬는 중 · 드래그로 주변 바다를 둘러보세요 · 화면을 누르면 일어나요' : '선베드에서 쉬는 중 · 드래그로 주변 바다를 둘러보세요 · 움직이거나 클릭하면 일어나요', false, 5); }),
       this.holdAct(loungerLie(l), loungerLie(l), Math.PI, 'lie', 0),
     ];
   }
@@ -657,7 +840,7 @@ export class App {
     this.lieState = 'rising';
     this.acts = [
       this.lieAct(sitRoot, 1.4, false, sitFeet),
-      this.sitAct(V3(side.x, UD + 0.9, side.z), side, faceOut, 1.0, 0, 'steps'),
+      this.sitAct(V3(side.x, UD + HIP_STAND, side.z), side, faceOut, 1.0, 0, 'steps'),
       this.call(() => { this.deck.place(side, faceOut, 'upper'); this.lying = null; this.lieState = 'none'; }),
     ];
   }
@@ -703,13 +886,31 @@ export class App {
     this.map.update(st, dt);
   }
 
-  get fp() { return store.get().view === 'first'; }
+  // ───────── 이어하기: 백그라운드에서 페이지가 정리돼도 있던 곳에서 다시 시작 ─────────
+  private saveSession() {
+    const s = store.get();
+    const where = ['anchored', 'gearing', 'entry', 'transfer', 'docking', 'swim'].includes(s.phase) ? s.phase : null;
+    try {
+      if (!where) { sessionStorage.removeItem('bi_session'); return; }
+      sessionStorage.setItem('bi_session', JSON.stringify({ phase: where, mode: s.mode, view: s.view, at: Date.now() }));
+    } catch { /* 저장 불가 */ }
+  }
+  private loadSession(): { phase: string; mode: Mode; view: 'first' | 'third' } | null {
+    try {
+      const v = JSON.parse(sessionStorage.getItem('bi_session') || 'null');
+      sessionStorage.removeItem('bi_session');
+      if (!v || Date.now() - v.at > 30 * 60 * 1000) return null;   // 30분이 지났으면 처음부터
+      return v;
+    } catch { return null; }
+  }
+
+  /** 1인칭은 물속(수영 중)에서만 · 판툰 위(걷기·장비 착용·입수 준비)는 항상 3인칭 */
+  get fp() { const s = store.get(); return s.view === 'first' && s.phase === 'swim'; }
 
   /** 수중에서 1인칭 ↔ 3인칭 전환 */
   toggleView() {
     const s = store.get();
-    if (s.phase === 'anchored' && !this.acts.length) { store.set({ view: s.view === 'first' ? 'third' : 'first' }); this.applyDeckView(); return; }
-    if (s.phase !== 'swim') return;
+    if (s.phase !== 'swim') return;   // 판툰 위에서는 시점 전환 없음 (항상 3인칭)
     store.set({ view: s.view === 'first' ? 'third' : 'first' });
     this.applyView(s.mode);
   }
@@ -863,7 +1064,7 @@ export class App {
     if (this.surfacedNow) return d.headWorld(V3()).add(V3(0, 0.12, 0));
     if (mode === 'snorkel') {
       const f = V3(Math.sin(this.snorkel.yaw), 0, Math.cos(this.snorkel.yaw));
-      return d.headWorld(V3()).addScaledVector(f, 0.5).add(V3(0, -0.75, 0));
+      return d.headWorld(V3()).addScaledVector(f, 0.38).add(V3(0, -0.58, 0));
     }
     return d.chestWorld(V3()).add(V3(0, 0.25, 0));
   }
@@ -1042,13 +1243,14 @@ export class App {
       }
       const st: NetState = {
         m: s.mode, w: vis ? 1 : 0, p: [lp.x, lp.y, lp.z], r: [r.rotation.x, r.rotation.y, r.rotation.z],
-        po: d.pose, sp: d.speed, mo: d.motion, ft, g: d.gearMask, su: d.suitOn ? 1 : 0, rl: d.rail ? 1 : 0,
+        po: d.pose, sp: d.speed, mo: d.motion, ft, g: d.gearMask, su: d.suitOn ? 1 : 0, rl: d.rail ? 1 : 0, wv: this.waveN,
       };
       this.net.update(dt, t, st);
     }
     // 바다 생물: 공유 시계(모든 접속자 공통) 기준 → 같은 생물이 같은 시각·위치에
     const W = worldNow();
     this.director.update(dt, t, W, this.info, this.camera.position);
+    this.fish.view(this.camera);
     this.fish.update(dt, t, this.info, W, this.camera.position);
     this.residents.update(t);
     this.benthic.update(dt, t, this.info, W);
@@ -1091,10 +1293,13 @@ export class App {
     this.bubbles.update(dt, t);
     const depth = Math.max(0, -cp.y);
     this.audio.update(dt, depth, engineLvl);
-    this.ui.setPerf(`${this.q.tier.toUpperCase()} · ${Math.round(this.engine.fps)} fps`);
+    this.ui.setPerf(`${this.q.tier.toUpperCase()} · ${Math.round(this.engine.fps)} fps · 해상도 ${this.engine.renderScale.toFixed(2)}x`);
     // 닉네임 태그 (카메라 갱신 뒤에 투영해야 흔들리지 않음)
     const mineVisible = this.diver.root.visible && ['transfer', 'anchored', 'gearing', 'entry', 'swim'].includes(s.phase);
     this.net.updateTags(mineVisible ? this.diver.headWorld(V3()) : null, mineVisible);
+    // 1인칭 손 인사 (카메라가 정해진 뒤 그 앞에 붙임)
+    this.fpHand.update(dt, this.fp && this.rig.mode === 'fp');
+    this.updateNearby(dt, s.phase);
     // 물 밖에 머리를 내밀었을 때: 판툰 위치 표시 (화면 밖이면 가장자리에 방향 표시)
     {
       const show = s.phase === 'swim' && !under;

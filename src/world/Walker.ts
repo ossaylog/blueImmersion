@@ -1,16 +1,18 @@
 // 발자국 기반 걷기: 경로를 발 디딤 지점으로 나눠 한 발씩 실제 바닥(계단 디딤판)에 딛게 함
-//  - 평지: 약 0.36m 간격으로 번갈아 디딤 (보폭 ≈ 0.72m, 약 1.1m/s)
+//  - 평지: 약 0.26m 간격으로 번갈아 디딤 (아담한 체형 기준)
 //  - 계단: 디딤판 하나에 한 발씩 (step-over-step), 내려갈 때는 발이 먼저 앞으로 나간 뒤 아래로 내려앉음
 //  - 경로 점마다 기준 좌표계(배·판툰)를 가져서, 흔들리는 배 → 현문 사다리 → 판툰으로 이어 걸어도 발이 미끄러지지 않음
 import * as THREE from 'three';
+import { HIP_STAND, HIP_STAIR } from '../character/Diver';
 import { dampAngle } from '../core/math';
 
 export interface WayPt { frame: THREE.Object3D; p: THREE.Vector3 }
 interface Step { seg: number; t: number; stair: boolean }
 
-const FLAT = 0.36, FLAT_T = 0.33, STAIR_T = 0.56;
-const HIP_FLAT = 0.9, HIP_STAIR = 0.86;
-const FOOT_W = 0.095;
+// 짧은 다리에 맞춘 보폭 (한 걸음 0.26m · 약 0.95m/s)
+const FLAT = 0.26, FLAT_T = 0.27, STAIR_T = 0.5;
+const HIP_FLAT = HIP_STAND;
+const FOOT_W = 0.078;
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3();
 const ease = (u: number) => u * u * (3 - 2 * u);
 
@@ -103,8 +105,10 @@ export class Walker {
     f.x = from.x + (to.x - from.x) * ue;
     f.z = from.z + (to.z - from.z) * ue;
     const dy = to.y - from.y;
-    const vy = dy < 0 ? Math.pow(u, 2.2) : Math.sqrt(u);      // 내려갈 땐 앞으로 먼저, 올라갈 땐 위로 먼저
-    const lift = (st.stair ? 0.09 : 0.06) * Math.sin(Math.PI * u) * (from.distanceTo(to) > 0.05 ? 1 : 0);
+    // 올라갈 땐 발을 먼저 들어 디딤판 코를 넘고, 내려갈 땐 앞으로 내밀었다가 내려 디딤
+    const vr = dy > 0.02 ? Math.min(1, u * 1.8) : dy < -0.02 ? Math.max(0, (u - 0.45) / 0.55) : u;
+    const vy = vr * vr * (3 - 2 * vr);
+    const lift = (st.stair ? 0.05 + Math.max(0, dy) * 0.25 : 0.045) * Math.sin(Math.PI * u) * (from.distanceTo(to) > 0.05 ? 1 : 0);
     f.y = from.y + dy * vy + lift;
     // 골반: 디딤발 위 → 다음 발자국 위로 이동 (계단에선 부드럽게 가라앉음)
     const c0 = this.center(i - 1, new THREE.Vector3()), c1 = this.center(i, new THREE.Vector3());
