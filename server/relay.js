@@ -25,6 +25,10 @@ export function attachRelay(httpServer, path = '/mp') {
   let seq = 0;
   /** 최근 대화 (서버가 살아 있는 동안만, 저장하지 않음) */
   const history = [];
+  /** 최근 희귀·전설 만남 연출 (늦게 들어온 사람도 지나가는 중인 생물을 같은 자리에서 봄) */
+  const ecoEvents = [];
+  const validEco = (e) => e && typeof e === 'object' && typeof e.k === 'string' && e.k.length <= 60 && typeof e.sp === 'string' && /^[a-z]{2,20}$/.test(e.sp)
+    && (e.tier === 2 || e.tier === 3) && ['T', 'x', 'y', 'z', 'ax', 'az'].every((f) => typeof e[f] === 'number' && Number.isFinite(e[f])) && Math.hypot(e.x, e.z) < 120;
 
   httpServer.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url ?? '/', 'http://x');
@@ -58,7 +62,9 @@ export function attachRelay(httpServer, path = '/mp') {
         joined = true;
         const nick = uniqueNick(cleanNick(m.nick));
         peers.set(id, { ws, nick, s: null });
-        send(ws, { t: 'welcome', id, nick, chat: history, peers: [...peers].filter(([pid]) => pid !== id).map(([pid, p]) => ({ id: pid, nick: p.nick, s: p.s })) });
+        const now = Date.now();
+        while (ecoEvents.length && now - ecoEvents[0].at > 5 * 60000) ecoEvents.shift();
+        send(ws, { t: 'welcome', id, nick, chat: history, eco: ecoEvents.map((x) => x.e), peers: [...peers].filter(([pid]) => pid !== id).map(([pid, p]) => ({ id: pid, nick: p.nick, s: p.s })) });
         broadcast(id, { t: 'join', id, nick });
       } else if (m.t === 'time' && typeof m.c === 'number') {
         // 시계 맞추기: 보낸 시각(c)을 그대로 돌려주며 서버 시각(s)을 함께 → 모든 접속자가 같은 '바다 시각'으로 생물을 봄
@@ -68,6 +74,17 @@ export function attachRelay(httpServer, path = '/mp') {
         if (!p) return;
         p.s = m.s;
         broadcast(id, { t: 'state', id, s: m.s });
+      } else if (m.t === 'eco' && joined) {
+        // 희귀·전설 만남 연출 공유 (한 사람당 20초에 하나까지)
+        const p = peers.get(id);
+        if (!p || !validEco(m.e)) return;
+        const now = Date.now();
+        if (now - (p.ecoAt ?? 0) < 20000) return;
+        p.ecoAt = now;
+        const e = { k: m.e.k, sp: m.e.sp, tier: m.e.tier, T: m.e.T, x: m.e.x, y: m.e.y, z: m.e.z, ax: m.e.ax, az: m.e.az };
+        ecoEvents.push({ e, at: now });
+        if (ecoEvents.length > 20) ecoEvents.shift();
+        broadcast(id, { t: 'eco', e });
       } else if (m.t === 'chat' && joined) {
         // 채팅: 서버가 최종 판정 (클라이언트 필터를 거치지 않고 직접 보낸 메시지도 막음)
         const p = peers.get(id);

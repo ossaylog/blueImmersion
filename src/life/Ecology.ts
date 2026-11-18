@@ -70,6 +70,19 @@ export class Path {
   tagAt(t: number) { const k = this.keys; const i = this.seg(t); return k[i].still && k[i + 1]?.still ? k[i].tag : undefined; }
 }
 
+/**
+ * 맞춤 출현 이벤트: 한 사람이 '지루해질 만한 순간'(판툰에서 멀어짐·접속 5분 등)에 부른 희귀·전설 생물
+ *  이 값만 주고받으면 모든 사람이 같은 경로를 계산 → 근처의 다른 사람에게도 같은 생물이 같은 곳에 보임
+ */
+export interface EcoEvent {
+  k: string;            // 고유 키
+  sp: string;           // 종 id
+  tier: 2 | 3;
+  T: number;            // 출발 시각 (공유 시계)
+  x: number; y: number; z: number;   // 다이버 옆을 지나는 지점
+  ax: number; az: number;            // 다가오는 방향 (단위 벡터, 출발점 → 지나는 지점)
+}
+
 export interface Plan {
   key: string;
   sp: SpeciesDef;
@@ -244,6 +257,8 @@ export class Ecology {
   private rarePool: Record<2 | 3, SpeciesDef[]> = { 2: [], 3: [] };
   private cache = new Map<string, Plan | null>();
   private list: Plan[] = [];
+  private events: Plan[] = [];
+  private byId = new Map<string, SpeciesDef>();
 
   constructor(species: SpeciesDef[], lowTier: boolean) {
     // 동시에 바다 전체(반경 82m)에 있는 무리 수 — 저사양은 조금 적게 (같은 서버의 모든 기기가 같은 값을 써야 하므로 등급과 무관하게 고정)
@@ -258,6 +273,7 @@ export class Ecology {
       const maxLife = Math.max(...pool.map((s) => s.stay[1]));
       this.streams.push({ id: id++, cls, count: targets[cls], slot: avg / targets[cls], maxLife, pool });
     }
+    for (const s of species) this.byId.set(s.id, s);
     for (const s of species) { const t = tierOf(s.id); if ((t === 2 || t === 3) && s.weight > 0 && s.sizeClass !== 'resident') this.rarePool[t].push(s); }
   }
 
@@ -283,9 +299,54 @@ export class Ecology {
         if (p && p.born <= T && T <= p.gone) this.list.push(p);
       }
     }
+    // 맞춤 출현 이벤트
+    for (const p of this.events) if (p.born <= T && T <= p.gone) this.list.push(p);
+    if (this.events.length && this.events[0].gone < T - 30) this.events = this.events.filter((p) => p.gone >= T - 30);
     // 오래된 계획 정리
     if (this.cache.size > 900) for (const [k, p] of this.cache) if (!p || p.gone < T - 30) this.cache.delete(k);
     return this.list;
+  }
+
+  /** 희귀·전설 후보 (등급별) */
+  rareSpecies(tier: 2 | 3) { return this.rarePool[tier]; }
+
+  /** 이 종이 이 지점(x,z) 근처에서 살 수 있는 수심 범위 (없으면 null) */
+  depthRange(sp: SpeciesDef, x: number, z: number): [number, number] | null {
+    const [lo, hi] = yRange(sp, x, z, 1.2);
+    return lo > hi + 1e-3 ? null : [lo, hi];
+  }
+
+  /** 지금 pos 근처(R m)에 있는 희귀·전설 무리 수 */
+  rareNear(T: number, pos: THREE.Vector3, R: number) {
+    let n = 0;
+    for (const p of this.alive(T)) {
+      if (p.tier < 2 || T > p.end) continue;
+      const q = p.path.at(T, _b);
+      if (Math.hypot(q.x - pos.x, q.z - pos.z) < R) n++;
+    }
+    return n;
+  }
+
+  /** 맞춤 출현 이벤트를 계획으로 (같은 값 → 모든 사람에게 같은 경로) */
+  addEvent(e: EcoEvent): Plan | null {
+    if (this.events.some((p) => p.key === e.k)) return null;
+    const sp = this.byId.get(e.sp);
+    if (!sp || (e.tier !== 2 && e.tier !== 3)) return null;
+    const vals = [e.T, e.x, e.y, e.z, e.ax, e.az];
+    if (vals.some((v) => typeof v !== 'number' || !Number.isFinite(v)) || Math.hypot(e.x, e.z) > 120) return null;
+    const r = seeded(7777, Math.round(e.T * 10), Math.round(e.x * 100), Math.round(e.z * 100));
+    const seed = hashInts(e.T * 1000, e.x * 100, e.z * 100, e.k.length);
+    const pr = mulberry32(seed);
+    const n = Math.max(1, Math.round(rr(pr, sp.group[0], sp.group[1])));
+    const hot = V3(e.x, e.y, e.z);
+    const dir = V3(e.ax, 0, e.az);
+    if (dir.lengthSq() < 1e-4) dir.set(1, 0, 0);
+    dir.normalize();
+    const { path, end, gone } = eventPath(r, sp, hot, dir, e.T);
+    const plan: Plan = { key: e.k, sp, seed, born: e.T, end, gone, n, path, tier: e.tier };
+    this.events.push(plan);
+    this.events.sort((a, b) => a.gone - b.gone);
+    return plan;
   }
 
   /** 슬롯 하나: 후보 위치 몇 곳 × 종별 (기본 가중치 × 서식지 적합도) 중 하나 */
@@ -376,4 +437,75 @@ function passPath(r: RNG, sp: SpeciesDef, a: THREE.Vector3, hot: THREE.Vector3, 
   }
   exitLeg(keys, end, gone, sp.speed[1]);
   return new Path(keys);
+}
+
+/**
+ * 맞춤 출현 경로: 멀리(약 32m)서 그림자로 다가와 다이버 옆 지점(hot)을 지나감
+ *  - 순항형(상어·고래·돌고래): 그대로 옆을 스쳐 반대편으로
+ *  - 선회형(만타·독수리가오리·정어리 떼): 다이버 앞에서 한동안 원을 그리며 머묾
+ *  - 머무는 형(거북·나폴레옹·혹등머리): 가까이 와서 천천히 맴돌며 먹이를 찾다가 떠남
+ */
+function eventPath(r: RNG, sp: SpeciesDef, hot: THREE.Vector3, dir: THREE.Vector3, born: number) {
+  const keys: Key[] = [];
+  const v = clamp((sp.speed[0] + sp.speed[1]) * 0.5, 0.45, 2.2);
+  const side = V3(dir.z, 0, -dir.x);
+  const D = 32;
+  const fix = (q: THREE.Vector3, y: number) => {
+    const [lo, hi] = yRange(sp, q.x, q.z, 1.2);
+    q.y = clamp(y, lo, Math.max(lo, hi));
+    clearOfPontoon(q);
+    return q;
+  };
+  // 1) 다가오기
+  const tA = D / v;
+  const nA = Math.max(4, Math.round(tA / 6));
+  for (let i = 0; i <= nA; i++) {
+    const u = i / nA;
+    const q = hot.clone().addScaledVector(dir, -D * (1 - u)).addScaledVector(side, Math.sin(u * Math.PI) * rr(r, -2.5, 2.5));
+    keys.push({ t: born + tA * u, p: fix(q, hot.y + (1 - u) * rr(r, -1.5, 1.5)) });
+  }
+  let t = born + tA;
+  const kind = sp.behavior === 'manta' || sp.behavior === 'eagle' || sp.id === 'sardine' ? 'circle'
+    : sp.behavior === 'turtle' || sp.behavior === 'graze' || sp.behavior === 'wander' ? 'linger' : 'pass';
+  if (kind === 'circle') {
+    // 다이버 앞에서 선회 (반지름 6~8m, 정어리 떼는 작은 소용돌이)
+    const R = sp.id === 'sardine' ? 4 : rr(r, 6, 8);
+    const c = hot.clone().addScaledVector(side, R);
+    const w = Math.max(0.12, v / R) * (r() < 0.5 ? 1 : -1);
+    const a0 = Math.atan2(hot.x - c.x, hot.z - c.z);
+    const dur = rr(r, 35, 50);
+    for (let s = 2; s <= dur; s += 2) {
+      const a = a0 + w * s;
+      const q = V3(c.x + Math.sin(a) * R, 0, c.z + Math.cos(a) * R);
+      keys.push({ t: t + s, p: fix(q, hot.y + Math.sin(s * 0.15) * 1.2) });
+    }
+    t += dur;
+  } else if (kind === 'linger') {
+    // 가까이 와서 천천히 맴돌기
+    const dur = rr(r, 28, 40);
+    let prev = keys[keys.length - 1].p;
+    for (let s = 7; s <= dur; s += 7) {
+      const a = r() * Math.PI * 2;
+      const q = hot.clone().add(V3(Math.sin(a) * 3, 0, Math.cos(a) * 3));
+      const step = q.clone().sub(prev).setY(0);
+      if (step.length() > v * 7) q.copy(prev).add(step.setLength(v * 7));
+      keys.push({ t: t + s, p: fix(q, hot.y + rr(r, -0.8, 0.8)) });
+      prev = q;
+    }
+    t += dur;
+  }
+  // 2) 지나가며 멀어지기 (다가온 방향 그대로 반대편으로)
+  const last = keys[keys.length - 1].p;
+  const out = kind === 'pass' ? dir.clone() : dir.clone().applyAxisAngle(V3(0, 1, 0), rr(r, -0.8, 0.8));
+  const tB = D / v;
+  const nB = Math.max(3, Math.round(tB / 6));
+  for (let i = 1; i <= nB; i++) {
+    const u = i / nB;
+    const q = last.clone().addScaledVector(out, D * u).addScaledVector(side, Math.sin(u * Math.PI) * rr(r, -2, 2));
+    keys.push({ t: t + tB * u, p: fix(q, last.y + u * rr(r, -2, 1)) });
+  }
+  const end = t + tB;
+  const gone = end + EXIT_T;
+  exitLeg(keys, end, gone, v);
+  return { path: new Path(keys), end, gone };
 }

@@ -8,6 +8,7 @@ import type { Bubbles } from '../water/Bubbles';
 import { disposeTree } from '../core/math';
 import { clockSample } from '../core/worldClock';
 import { checkChat } from '../../server/chatFilter.js';
+import type { EcoEvent } from '../life/Ecology';
 
 const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 
@@ -67,6 +68,8 @@ export class Multiplayer {
   /** 다른 사람이 손을 흔듦 (월드 위치) */
   onWave?: (nick: string, at: THREE.Vector3) => void;
   chatLog: ChatMsg[] = [];
+  /** 다른 사람이 부른 희귀·전설 만남 연출 */
+  onEco?: (e: EcoEvent) => void;
   private mySayT = 0;
   private ws: WebSocket | null = null;
   private bc: BroadcastChannel | null = null;
@@ -157,6 +160,7 @@ export class Multiplayer {
       const m = e.data;
       if (!m || m.id === this.id) return;
       if (m.t === 'bye') { this.removePeer(m.id); return; }
+      if (m.t === 'eco') { if (m.e) this.onEco?.(m.e); return; }
       if (m.t === 'chat') { const r = checkChat(m.x); if (r.ok) this.addChat(m.id, m.nick, r.text, m.at); return; }
       if (m.t === 'state') {
         if (!this.peers.has(m.id)) { this.addPeer(m.id, m.nick); this.onNotice?.(`${m.nick} 님이 접속했어요`); }
@@ -168,7 +172,7 @@ export class Multiplayer {
   }
   private closeLocal() { if (this.bc) { this.bc.postMessage({ t: 'bye', id: this.id }); this.bc.close(); this.bc = null; } }
 
-  private onMsg(m: { t: string; id?: string; nick?: string; s?: NetState | number; c?: number; peers?: { id: string; nick: string; s: NetState | null }[]; chat?: { id: string; nick: string; x: string; at: number }[]; x?: unknown; at?: number; why?: string }) {
+  private onMsg(m: { t: string; id?: string; nick?: string; s?: NetState | number; c?: number; peers?: { id: string; nick: string; s: NetState | null }[]; chat?: { id: string; nick: string; x: string; at: number }[]; eco?: EcoEvent[]; e?: EcoEvent; x?: unknown; at?: number; why?: string }) {
     if (m.t === 'time') { if (typeof m.c === 'number' && typeof m.s === 'number') clockSample(m.c, m.s); return; }
     if (m.t === 'welcome') {
       this.online = true; this.mode = 'ws';
@@ -177,6 +181,7 @@ export class Multiplayer {
       for (const p of m.peers ?? []) { this.addPeer(p.id, p.nick); if (p.s) this.pushState(p.id, p.s); }
       // 접속 전 최근 대화 (다시 연결된 경우 이미 받은 것은 건너뜀)
       const seen = new Set(this.chatLog.map((c) => `${c.at}|${c.x}`));
+      for (const e of (m.eco ?? [])) this.onEco?.(e);
       for (const c of (m.chat ?? [])) if (!seen.has(`${c.at}|${c.x}`)) this.addChat(c.id, c.nick, c.x, c.at, true);
       this.onPeersChanged?.();
     } else if (m.t === 'join' && m.id) {
@@ -187,7 +192,14 @@ export class Multiplayer {
       this.pushState(m.id, m.s);
     } else if (m.t === 'leave' && m.id) this.removePeer(m.id);
     else if (m.t === 'chat' && m.id && typeof m.x === 'string') this.addChat(m.id, m.nick ?? '다이버', m.x, m.at ?? Date.now());
+    else if (m.t === 'eco' && m.e) this.onEco?.(m.e);
     else if (m.t === 'chatNo') this.onChatRefused?.(String(m.why ?? 'bad'));
+  }
+
+  /** 희귀·전설 만남 연출을 다른 사람에게 */
+  sendEco(e: EcoEvent) {
+    if (this.ws && this.online && this.ws.readyState === 1) this.ws.send(JSON.stringify({ t: 'eco', e }));
+    else this.bc?.postMessage({ t: 'eco', id: this.id, e });
   }
 
   // ───────── 채팅 ─────────

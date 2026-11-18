@@ -39,6 +39,7 @@ import { AudioEngine } from './audio/Audio';
 import { UI } from './ui/UI';
 import { Multiplayer, type NetState } from './net/Multiplayer';
 import { FPHand } from './character/FPHand';
+import { RareDirector } from './life/RareDirector';
 import { worldNow } from './core/worldClock';
 
 const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -85,6 +86,9 @@ export class App {
   private zoneDismissed = new Set<ZoneId>();
   /** 손 인사: 보낸 횟수(다른 사람에게 전달) · 1인칭 손 · 가까운 다이버 안내 */
   private waveN = 0;
+  /** 지루해질 만한 순간에 희귀·전설 생물을 1~2마리씩 */
+  private rare!: RareDirector;
+  private rareHintAt = -1e9;
   private fpHand!: FPHand;
   private nearT = 0;
   private nearSeen = new Map<string, number>();
@@ -196,6 +200,7 @@ export class App {
     this.director.onSighted = (sp, c) => {
       const tier = tierOf(sp.id);
       const isNew = this.collection.record(sp, Math.max(0, -this.camera.position.y));
+      this.rare?.noteSeen(tier);
       if (isNew) fresh.set(sp.id, performance.now());
       if (isNew || !this.collection.photos[sp.id]) {
         this.capturePhoto(c, (url) => {
@@ -213,7 +218,10 @@ export class App {
       this.ui.toast(sp.nameKo, `${sp.nameEn} · ${sp.sci}`, tierOf(sp.id), isNew);
     };
     this.director.onRareSpawn = (sp, tier) => {
-      if (tier === 3 && sp.id !== 'humpback' && store.get().phase === 'swim') this.ui.hint('푸른 물 너머로 커다란 그림자가 스친 것 같아요…', false, 5);
+      // 멀리서 다가오는 그림자 안내 (너무 자주 뜨지 않게 25초에 한 번)
+      if (store.get().phase !== 'swim' || sp.id === 'humpback' || performance.now() - this.rareHintAt < 25000) return;
+      this.rareHintAt = performance.now();
+      this.ui.hint(tier === 3 ? '푸른 물 너머로 커다란 그림자가 다가오는 것 같아요… 앞쪽을 지켜보세요' : '멀리서 무언가 다가오고 있어요 · 주위를 천천히 둘러보세요', false, 5);
     };
     this.director.onEncounterEnd = () => this.ui.hideToast();
     this.director.onSpawn = (sp) => { if (sp.id === 'humpback') this.audio.whaleSong(); };
@@ -238,6 +246,10 @@ export class App {
       if (at.distanceTo(me) < 25) this.ui.mpNotice(`👋 ${nick} 님이 손을 흔들어요`);
     };
     this.fpHand = new FPHand(sc, this.diver, this.camera);
+    this.rare = new RareDirector(this.director.eco, () => this.net.id);
+    this.rare.isCollected = (id) => !!this.collection.found[id];
+    this.rare.onEvent = (e) => this.net.sendEco(e);
+    this.net.onEco = (e) => this.director.eco.addEvent(e);
     this.ui.setOnline(this.net.count, this.net.nick, this.net.mode);
     this.ui.setChatWho(this.net.count);
     this.scuba.onInhale = () => this.audio.inhale(this.scuba.depth);
@@ -1250,6 +1262,12 @@ export class App {
     // 바다 생물: 공유 시계(모든 접속자 공통) 기준 → 같은 생물이 같은 시각·위치에
     const W = worldNow();
     this.director.update(dt, t, W, this.info, this.camera.position);
+    {
+      const swimming = s.phase === 'swim' && (s.mode === 'snorkel' || s.mode === 'scuba');
+      const fwd = this.camera.getWorldDirection(V3());
+      const depth = s.mode === 'snorkel' ? this.snorkel.depth : this.scuba.depth;
+      this.rare.update(dt, { swimming, pos: this.fp ? this.camera.position : this.diver.root.position, fwd, depth, T: W, snorkel: s.mode === 'snorkel' });
+    }
     this.fish.view(this.camera);
     this.fish.update(dt, t, this.info, W, this.camera.position);
     this.residents.update(t);
